@@ -3,6 +3,11 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import dotenv from 'dotenv';  // Import dotenv
+
+// Load environment variables
+dotenv.config();
+
 import productRoutes from './routes/product.js';
 import dbPromise from './db.js';
 import filterRoutes from './routes/filters.js';
@@ -18,7 +23,10 @@ const app = express();
 
 // Add CORS configuration before your routes
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  // In production, allow all origins or use specific domains
+  origin: process.env.NODE_ENV === 'production'
+    ? '*' // Allow any origin in production
+    : ['http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-auth-token', 'Authorization', 'Accept']
