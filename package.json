@@ -4,11 +4,13 @@
   "description": "Backend API for Manju Mobiles Website",
   "main": "server.js",
   "type": "module",
+  "license": "MIT",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "vite",
-    "dev:backend": "nodemon server.js"
+    "dev:backend": "nodemon server.js",
+    "start": "node app.js"
   },
   "dependencies": {
     "axios": "^1.9.0",
@@ -16,6 +18,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
+    "google-auth-library": "^9.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^5.6.0",
     "mongoose": "^8.14.2",
