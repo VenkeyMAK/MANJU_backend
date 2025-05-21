@@ -1,5 +1,11 @@
 import { MongoClient } from 'mongodb';
-const uri = 'mongodb+srv://venkatesh:MAKpass@cluster0.nh7iqso.mongodb.net';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+// Use environment variable or fallback to the direct connection string
+const uri = process.env.MONGODB_URI  ;
 const client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 30000, // 30 second timeout
   maxPoolSize: 50,

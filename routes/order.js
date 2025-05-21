@@ -10,12 +10,12 @@ const router = express.Router();
 
 // Create a transport with Hostinger SMTP settings
 const transporter = nodemailer.createTransport({
-  host: 'smtp.hostinger.com',
-  port: 465,
+  host: process.env.EMAIL_HOST || 'smtp.hostinger.com',
+  port: process.env.EMAIL_PORT || 465,
   secure: true,
   auth: {
-    user: 'murugan@arjanapartners.in',
-    pass: 'Murugan@123'
+    user: process.env.EMAIL_USER || 'murugan@arjanapartners.in',
+    pass: process.env.EMAIL_PASSWORD || 'Murugan@123'
   },
   debug: true,
   tls: {
