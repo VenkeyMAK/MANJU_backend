@@ -1,4 +1,5 @@
 import express from 'express';
+import groceryRoutes from './routes/grocery.js';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -67,6 +68,7 @@ app.use('/api', orderRoutes);
 
 // Add user routes
 app.use('/api/users', userRoutes);
+app.use('/api/groceries', groceryRoutes);
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
