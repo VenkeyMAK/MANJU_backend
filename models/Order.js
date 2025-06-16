@@ -7,7 +7,9 @@ const Order = {
       ...orderData,
       createdAt: new Date()
     });
-    return result;
+    // Fetch and return the full document to ensure all data, including the user ID, is passed on
+    const newOrder = await collection.findOne({ _id: result.insertedId });
+    return newOrder;
   },
 
   async findById(db, id) {

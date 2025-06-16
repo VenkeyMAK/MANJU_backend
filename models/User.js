@@ -1,55 +1,94 @@
 import { ObjectId } from 'mongodb';
 import bcrypt from 'bcrypt';
-// Import the connectDB function instead of the unresolved promise/instance
+import crypto from 'crypto';
 import connectDB from '../db.js';
 
-
-// User collection operations
 const User = {
-  // Create a new user
-  async create(userData) {
-    // Call connectDB() to get the database instance
-    const database = await connectDB();
-    const collection = database.collection('users');
+  generateReferralCode() {
+    return crypto.randomBytes(4).toString('hex').toUpperCase();
+  },
 
-    // Only hash password if it is provided (not null/undefined)
+  async create(userData) {
+    const db = await connectDB();
+    const usersCollection = db.collection('users');
+
     if (userData.password) {
       const salt = await bcrypt.genSalt(10);
       userData.password = await bcrypt.hash(userData.password, salt);
     }
 
-    // Add creation timestamp
-    userData.createdAt = new Date();
+    let referralCode = this.generateReferralCode();
+    while (await this.findByReferralCode(referralCode)) {
+      referralCode = this.generateReferralCode();
+    }
+    
+    const newUser = {
+        ...userData,
+        referralCode,
+        walletBalance: 0,
+        upline: [],
+        referrerId: null,
+        createdAt: new Date(),
+    };
 
-    const result = await collection.insertOne(userData);
+    if (userData.referrerCode) {
+      const referrer = await this.findByReferralCode(userData.referrerCode);
+      if (referrer) {
+        newUser.referrerId = referrer._id;
+        const referrerUpline = referrer.upline || [];
+        newUser.upline = [referrer._id, ...referrerUpline].slice(0, 100);
+      }
+    }
+    
+    delete newUser.referrerCode;
+
+    const result = await usersCollection.insertOne(newUser);
     return result;
   },
 
-  // Find user by email
   async findByEmail(email) {
-    // Call connectDB() to get the database instance
-    const database = await connectDB();
-    const collection = database.collection('users');
-    return await collection.findOne({ email });
+    const db = await connectDB();
+    const usersCollection = db.collection('users');
+    return await usersCollection.findOne({ email });
   },
 
-  // Find user by ID
   async findById(id) {
-    // Call connectDB() to get the database instance
-    const database = await connectDB();
-    const collection = database.collection('users');
-    // Ensure the ID is converted to an ObjectId
+    const db = await connectDB();
+    const usersCollection = db.collection('users');
     if (!ObjectId.isValid(id)) {
-        return null; // Or throw an error, depending on desired behavior
+      return null;
     }
-    return await collection.findOne({ _id: new ObjectId(id) });
+    return await usersCollection.findOne({ _id: new ObjectId(id) });
+  },
+  
+  async findByReferralCode(code) {
+    const db = await connectDB();
+    const usersCollection = db.collection('users');
+    return await usersCollection.findOne({ referralCode: code });
   },
 
-  // Validate password (doesn't need DB connection)
   async validatePassword(plainPassword, hashedPassword) {
     return await bcrypt.compare(plainPassword, hashedPassword);
+  },
+  
+  async updateGoogleId(userId, googleId) {
+    const db = await connectDB();
+    const usersCollection = db.collection('users');
+    return await usersCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { googleId: googleId, updatedAt: new Date() } }
+    );
+  },
+
+  async updateWalletBalance(userId, amount, session) {
+    const db = await connectDB();
+    const usersCollection = db.collection('users');
+    return await usersCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      { $inc: { walletBalance: amount }, $set: { updatedAt: new Date() } },
+      { session }
+    );
   }
-  // Ensure all methods are defined *within* this closing brace
 };
 
 export default User;

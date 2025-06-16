@@ -11,6 +11,9 @@ dotenv.config();
 import productRoutes from './routes/product.js';
 import dbPromise from './db.js';
 import filterRoutes from './routes/filters.js';
+import reviewsRoutes from './routes/reviews.js';
+import walletRoutes from './routes/walletRoutes.js';
+import referralRoutes from './routes/referralRoutes.js';
 import authRoutes from './routes/auth.js';
 import accessoriesRoutes from './routes/accessories.js';
 import orderRoutes from './routes/order.js';
@@ -21,16 +24,24 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Add CORS configuration before your routes
+// Update CORS configuration
+const allowedOrigins = ['http://localhost:8080', 'http://localhost:3000'];
+
 app.use(cors({
-  // In production, allow all origins or use specific domains
-  origin: process.env.NODE_ENV === 'production'
-    ? '*' // Allow any origin in production
-    : ['http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:5173'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'x-auth-token', 'Authorization', 'Accept']
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+  credentials: true
 }));
+
+// Enable pre-flight requests for all routes
+app.options('*', cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -47,6 +58,9 @@ app.use((err, req, res, next) => {
 // Mount routes
 app.use('/api/products', productRoutes);
 app.use('/api/accessories', accessoriesRoutes);
+app.use('/api/reviews', reviewsRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/referral', referralRoutes);
 app.use('/api/filters', filterRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api', orderRoutes);

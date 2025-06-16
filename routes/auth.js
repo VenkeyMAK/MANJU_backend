@@ -4,8 +4,7 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET  ; // Use environment variable or fallback
@@ -37,7 +36,7 @@ router.get('/check-email', async (req, res) => {
 // Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, referrerCode } = req.body;
     
     // Validate input
     if (!name || !email || !password) {
@@ -56,7 +55,8 @@ router.post('/register', async (req, res) => {
       email,
       password,
       phone: phone || '',
-      role: 'customer' // Default role
+      role: 'customer', // Default role
+      referrerCode // Pass the referral code
     };
     
     const result = await User.create(userData);
@@ -158,7 +158,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Google OAuth login/register
+// Update Google OAuth route
 router.post('/google', async (req, res) => {
   try {
     const { token } = req.body;
@@ -167,7 +167,6 @@ router.post('/google', async (req, res) => {
       return res.status(400).json({ message: 'Google token is required' });
     }
 
-    // Verify the Google token
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID
@@ -232,7 +231,8 @@ router.post('/google', async (req, res) => {
     console.error('Google auth error:', error);
     res.status(500).json({ 
       message: 'Google authentication failed',
-      error: error.message 
+      details: error.message,
+      origin: req.headers.origin 
     });
   }
 });

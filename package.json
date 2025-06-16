@@ -9,12 +9,13 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "vite",
-    "dev:backend": "nodemon server.js",
+    "dev:backend": "nodemon app.js",
     "start": "node app.js"
   },
   "dependencies": {
     "axios": "^1.9.0",
     "bcrypt": "^5.1.0",
+    "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
