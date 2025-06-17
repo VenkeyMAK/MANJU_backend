@@ -21,7 +21,13 @@ import {
   addToAccessoriesCart,
   updateAccessoriesCartItem,
   removeFromAccessoriesCart,
-  clearAccessoriesCart
+  clearAccessoriesCart,
+  // Add new groceries cart controllers
+  getGroceriesCart,
+  addToGroceriesCart,
+  updateGroceriesCartItem,
+  removeFromGroceriesCart,
+  clearGroceriesCart
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -57,5 +63,12 @@ router.post('/accessories-cart', auth, addToAccessoriesCart);
 router.put('/accessories-cart/:itemId', auth, updateAccessoriesCartItem);
 router.delete('/accessories-cart/:itemId', auth, removeFromAccessoriesCart);
 router.delete('/accessories-cart', auth, clearAccessoriesCart);
+
+// Groceries cart routes
+router.get('/groceries-cart', auth, getGroceriesCart);
+router.post('/groceries-cart', auth, addToGroceriesCart);
+router.put('/groceries-cart/:itemId', auth, updateGroceriesCartItem);
+router.delete('/groceries-cart/:itemId', auth, removeFromGroceriesCart);
+router.delete('/groceries-cart', auth, clearGroceriesCart);
 
 export default router;

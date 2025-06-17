@@ -313,46 +313,65 @@ export const getCart = async (req, res) => {
     const db = await dbPromise();
     const profile = await db.collection('userprofiles').findOne({ userId });
 
-    const cartItems = profile?.cart || [];
-    if (cartItems.length === 0) {
+    if (!profile) {
       return res.json([]);
     }
 
-    // Convert productIds to ObjectId for querying
-    const productIds = cartItems.map(item => {
-      try {
-        return new ObjectId(item.productId);
-      } catch {
-        return null;
-      }
-    }).filter(id => id !== null);
+    // Combine all cart items from different categories
+    const productCart = (profile.cart || []).map(item => ({ ...item, category: 'products' }));
+    const accessoriesCart = (profile.accessoriesCart || []).map(item => ({ ...item, category: 'accessories' }));
+    const groceriesCart = (profile.groceriesCart || []).map(item => ({ ...item, category: 'groceries' }));
 
-    let products = [];
-    if (productIds.length > 0) {
-      products = await db.collection('Products').find({ _id: { $in: productIds } }).toArray();
+    const allCartItems = [...productCart, ...accessoriesCart, ...groceriesCart];
+
+    if (allCartItems.length === 0) {
+      return res.json([]);
     }
 
+    // Get all unique product IDs from all carts
+    const productIds = [...new Set(allCartItems.map(item => item.productId).filter(id => id))];
+    const objectProductIds = productIds.map(id => {
+        try {
+            return new ObjectId(id);
+        } catch {
+            return null;
+        }
+    }).filter(id => id !== null);
+
+    // Fetch all product details from all collections in parallel
+    const [products, accessories, groceries] = await Promise.all([
+      db.collection('Products').find({ _id: { $in: objectProductIds } }).toArray(),
+      db.collection('Accessories').find({ _id: { $in: objectProductIds } }).toArray(),
+      db.collection('Groceries').find({ _id: { $in: objectProductIds } }).toArray()
+    ]);
+
+    const allProductsMap = new Map();
+    [...products, ...accessories, ...groceries].forEach(p => allProductsMap.set(p._id.toString(), p));
+
     // Map cart items with full product details
-    const cartWithDetails = cartItems.map(item => {
-      const productDetail = products.find(
-        p => p._id.toString() === item.productId.toString()
-      );
+    const cartWithDetails = allCartItems.map(item => {
+      const productDetail = allProductsMap.get(item.productId.toString());
+      
       return {
         ...item,
         product: productDetail
           ? {
               id: productDetail._id.toString(),
+              _id: productDetail._id.toString(),
               name: productDetail["Model Name"] || productDetail.name || "N/A",
               description: productDetail.description || "N/A",
-              price: parseFloat(productDetail["Price"]?.replace(/[^0-9.-]+/g, "")) || productDetail.price || 0,
+              price: parseFloat(String(productDetail["Price"] || productDetail.price || '0').replace(/[^0-9.-]+/g, "")) || 0,
               imageUrl: productDetail["Image URL"] || productDetail.imageUrl || "https://via.placeholder.com/150?text=No+Image",
-            }
+              category: item.category, // Carry over the category
+          }
           : {
               id: item.productId,
-              name: "N/A",
-              description: "N/A",
+              _id: item.productId,
+              name: "Product not found",
+              description: "The product associated with this item could not be found.",
               price: 0,
-              imageUrl: "https://via.placeholder.com/150?text=No+Image"
+              imageUrl: "https://via.placeholder.com/150?text=Not+Found",
+              category: item.category,
             }
       };
     });
@@ -663,5 +682,122 @@ export const clearAccessoriesCart = async (req, res) => {
   } catch (error) {
     console.error('Clear accessories cart error:', error);
     res.status(500).json({ message: 'Failed to clear accessories cart', error: error.message });
+  }
+};
+
+// Groceries Cart Controllers
+export const getGroceriesCart = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const db = await dbPromise();
+    const profile = await UserProfile.findOne(db, { userId });
+    res.json(profile?.groceriesCart || []);
+  } catch (error) {
+    console.error('Get groceries cart error:', error);
+    res.status(500).json({ message: 'Failed to get groceries cart', error: error.message });
+  }
+};
+
+export const addToGroceriesCart = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { productId, quantity } = req.body;
+    const db = await dbPromise();
+
+    const product = await db.collection('Groceries').findOne({ _id: new ObjectId(productId) });
+    if (!product) {
+      return res.status(404).json({ message: 'Grocery product not found' });
+    }
+
+    let profile = await UserProfile.findOne(db, { userId });
+    if (!profile) {
+      profile = { userId, groceriesCart: [], createdAt: new Date() };
+      await UserProfile.insertOne(db, profile);
+    }
+
+    const existingCartItem = (profile.groceriesCart || []).find(item => item.productId === productId);
+    let updatedCart;
+    if (existingCartItem) {
+      updatedCart = profile.groceriesCart.map(item =>
+        item.productId === productId
+          ? { ...item, quantity: item.quantity + quantity }
+          : item
+      );
+    } else {
+      const newCartItem = {
+        _id: new ObjectId(),
+        productId,
+        quantity,
+        product: { ...product, id: product._id, category: 'groceries' },
+        addedAt: new Date()
+      };
+      updatedCart = [...(profile.groceriesCart || []), newCartItem];
+    }
+
+    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: updatedCart } });
+    res.json(updatedCart);
+  } catch (error) {
+    console.error('Add to groceries cart error:', error);
+    res.status(500).json({ message: 'Failed to add to groceries cart', error: error.message });
+  }
+};
+
+export const updateGroceriesCartItem = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const cartItemId = req.params.itemId;
+    const { quantity } = req.body;
+    const db = await dbPromise();
+
+    const profile = await UserProfile.findOne(db, { userId });
+    if (!profile || !profile.groceriesCart) {
+      return res.status(404).json({ message: 'Groceries cart not found' });
+    }
+
+    const updatedCart = profile.groceriesCart.map(item =>
+      item._id && item._id.toString() === cartItemId
+        ? { ...item, quantity }
+        : item
+    );
+
+    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: updatedCart } });
+    res.json(updatedCart);
+  } catch (error) {
+    console.error('Update groceries cart item error:', error);
+    res.status(500).json({ message: 'Failed to update groceries cart item', error: error.message });
+  }
+};
+
+export const removeFromGroceriesCart = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const cartItemId = req.params.itemId;
+    const db = await dbPromise();
+
+    const profile = await UserProfile.findOne(db, { userId });
+    if (!profile || !profile.groceriesCart) {
+      return res.status(404).json({ message: 'Groceries cart not found' });
+    }
+
+    const updatedCart = profile.groceriesCart.filter(item => !(item._id && item._id.toString() === cartItemId));
+
+    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: updatedCart } });
+    res.json(updatedCart);
+  } catch (error) {
+    console.error('Remove from groceries cart error:', error);
+    res.status(500).json({ message: 'Failed to remove from groceries cart', error: error.message });
+  }
+};
+
+export const clearGroceriesCart = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const db = await dbPromise();
+
+    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: [] } });
+    res.json([]);
+  } catch (error) {
+    console.error('Clear groceries cart error:', error);
+    res.status(500).json({ message: 'Failed to clear groceries cart', error: error.message });
   }
 };
