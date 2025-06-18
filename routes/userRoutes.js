@@ -15,7 +15,7 @@ import {
   addToCart,
   updateCartItem,
   removeFromCart,
-  clearCart,
+  // clearCart,
   // Add new accessories cart controllers
   getAccessoriesCart,
   addToAccessoriesCart,
@@ -27,8 +27,11 @@ import {
   addToGroceriesCart,
   updateGroceriesCartItem,
   removeFromGroceriesCart,
-  clearGroceriesCart
+  clearGroceriesCart,
+  getAllCarts,
+  clearAllCarts
 } from '../controllers/userController.js';
+
 
 const router = express.Router();
 
@@ -50,12 +53,18 @@ router.get('/wishlist', auth, getWishlist);
 router.post('/wishlist', auth, addToWishlist);
 router.delete('/wishlist/:productId', auth, removeFromWishlist);
 
+// Get all carts route
+router.get('/cart/all', auth, getAllCarts);
+
+// Clear all carts route
+router.delete('/cart/all', auth, clearAllCarts);
+
 // Product Cart routes
 router.get('/cart', auth, getCart);
 router.post('/cart', auth, addToCart);
 router.put('/cart/:itemId', auth, updateCartItem);
 router.delete('/cart/:itemId', auth, removeFromCart);
-router.delete('/cart', auth, clearCart);
+// router.delete('/cart', auth, clearCart);
 
 // Accessories cart routes
 router.get('/accessories-cart', auth, getAccessoriesCart);
