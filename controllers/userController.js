@@ -499,6 +499,7 @@ export const clearCart = async (req, res) => {
     );
     res.json([]);
   } catch (error) {
+    console.error('Clear cart error:', error);
     res.status(500).json({ message: 'Failed to clear cart', error: error.message });
   }
 };
@@ -546,11 +547,17 @@ export const addToAccessoriesCart = async (req, res) => {
   try {
     const userId = req.user.id;
     const db = await dbPromise();
-    const { productId, quantity = 1, product } = req.body;
+    const { productId, quantity = 1 } = req.body;
 
     // Defensive: ensure productId is present
     if (!productId) {
       return res.status(400).json({ message: 'Product id is required for cart' });
+    }
+
+    const product = await db.collection('Accessories').findOne({ id: productId });
+
+    if (!product) {
+      return res.status(404).json({ message: 'Accessory not found' });
     }
 
     // Find user profile or create if not exists
@@ -587,14 +594,9 @@ export const addToAccessoriesCart = async (req, res) => {
         productId,
         quantity,
         product: {
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          price: product.price,
-          imageUrl: product.imageUrl,
-          brand: product.brand,
-          category: 'accessories',
-          stock: product.stock
+          ...product,
+          id: product._id,
+          category: 'accessories'
         },
         addedAt: new Date()
       };
@@ -680,8 +682,8 @@ export const clearAccessoriesCart = async (req, res) => {
     );
     res.json([]);
   } catch (error) {
-    console.error('Clear accessories cart error:', error);
-    res.status(500).json({ message: 'Failed to clear accessories cart', error: error.message });
+    console.error('Clear cart error:', error);
+    res.status(500).json({ message: 'Failed to clear cart', error: error.message });
   }
 };
 
@@ -701,10 +703,14 @@ export const getGroceriesCart = async (req, res) => {
 export const addToGroceriesCart = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { productId, quantity } = req.body;
+    const { productId, quantity = 1 } = req.body;
     const db = await dbPromise();
 
-    const product = await db.collection('Groceries').findOne({ _id: new ObjectId(productId) });
+    if (!productId) {
+      return res.status(400).json({ message: 'Product ID is required' });
+    }
+
+    const product = await db.collection('Grocery').findOne({ _id: new ObjectId(productId) });
     if (!product) {
       return res.status(404).json({ message: 'Grocery product not found' });
     }
