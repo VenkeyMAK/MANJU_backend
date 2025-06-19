@@ -20,6 +20,7 @@ import accessoriesRoutes from './routes/accessories.js';
 import orderRoutes from './routes/order.js';
 import userRoutes from './routes/userRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import customerRoutes from './routes/customer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +74,7 @@ app.use('/api/groceries', groceryRoutes);
 
 // Add admin routes
 app.use('/api/admin', adminRoutes);
+app.use('/api/customers', customerRoutes);
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');

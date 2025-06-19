@@ -12,7 +12,7 @@ const COMMISSION_LEVELS = {
 };
 
 const MIN_COMMISSION_PAYOUT = 0.10;
-const COMPANY_MARGIN_SHARE = 0.20;
+const COMPANY_MARGIN_SHARE = 0.50;
 
 const CommissionService = {
   async distribute(order) {

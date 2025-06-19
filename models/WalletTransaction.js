@@ -1,32 +1,43 @@
 import { ObjectId } from 'mongodb';
 import connectDB from '../db.js';
 
-const WalletTransaction = {
-  // Create a new wallet transaction
-  async create(transactionData, session) {
+class WalletTransaction {
+  static async findTransactions(query = {}) {
     const db = await connectDB();
-    const collection = db.collection('wallet_transactions');
-    
+    return await db.collection('wallet_transactions')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+  }
+
+  static async findByUserId(userId) {
+    const db = await connectDB();
+    return await db.collection('wallet_transactions')
+      .find({ userId: new ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .toArray();
+  }
+
+  static async create(transactionData) {
+    const db = await connectDB();
     const transaction = {
       userId: new ObjectId(transactionData.userId),
-      amount: transactionData.amount, // can be positive (credit) or negative (debit)
-      type: transactionData.type, // 'cashback', 'mlm_commission', 'withdrawal', 'bonus'
+      amount: transactionData.amount,
+      type: transactionData.type,
       description: transactionData.description,
-      relatedOrderId: transactionData.relatedOrderId ? new ObjectId(transactionData.relatedOrderId) : null,
-      relatedUserId: transactionData.relatedUserId ? new ObjectId(transactionData.relatedUserId) : null, // e.g., the user who made the purchase for MLM
+      status: transactionData.status || 'completed',
       createdAt: new Date(),
+      ...(transactionData.relatedOrderId && { 
+        relatedOrderId: new ObjectId(transactionData.relatedOrderId) 
+      }),
+      ...(transactionData.relatedUserId && { 
+        relatedUserId: new ObjectId(transactionData.relatedUserId) 
+      })
     };
 
-    const result = await collection.insertOne(transaction, { session });
-    return result;
-  },
-
-  // Find transactions by user ID
-  async findByUserId(userId) {
-    const db = await connectDB();
-    const collection = db.collection('wallet_transactions');
-    return await collection.find({ userId: new ObjectId(userId) }).sort({ createdAt: -1 }).toArray();
+    const result = await db.collection('wallet_transactions').insertOne(transaction);
+    return { ...transaction, _id: result.insertedId };
   }
-};
+}
 
 export default WalletTransaction;
