@@ -262,7 +262,6 @@ export const removeFromWishlist = async (req, res) => {
   }
 };
 
-
 export const addOrder = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -295,6 +294,36 @@ export const addOrder = async (req, res) => {
   }
 };
 
+export const clearAllCarts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const db = await dbPromise();
+
+    const result = await db.collection('userprofiles').updateOne(
+      { userId: userId },
+      { 
+        $set: { 
+          cart: [],
+          accessoriesCart: [],
+          groceriesCart: []
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'User profile not found.' });
+    }
+
+    res.status(200).json({ message: 'All carts cleared successfully' });
+  } catch (error) {
+    console.error('Clear all carts error:', error);
+    res.status(500).json({ 
+      message: 'Failed to clear carts',
+      error: error.message
+    });
+  }
+};
+
 export const getWishlist = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -307,13 +336,16 @@ export const getWishlist = async (req, res) => {
 };
 
 // Cart Controllers
-export const getCart = async (req, res) => {
+export const getCart = async (req, res, returnData = false) => {
   try {
     const userId = req.user.id;
     const db = await dbPromise();
     const profile = await db.collection('userprofiles').findOne({ userId });
 
     if (!profile) {
+      if (returnData) {
+        return [];
+      }
       return res.json([]);
     }
 
@@ -325,6 +357,9 @@ export const getCart = async (req, res) => {
     const allCartItems = [...productCart, ...accessoriesCart, ...groceriesCart];
 
     if (allCartItems.length === 0) {
+      if (returnData) {
+        return [];
+      }
       return res.json([]);
     }
 
@@ -348,34 +383,36 @@ export const getCart = async (req, res) => {
     const allProductsMap = new Map();
     [...products, ...accessories, ...groceries].forEach(p => allProductsMap.set(p._id.toString(), p));
 
-    // Map cart items with full product details
-    const cartWithDetails = allCartItems.map(item => {
-      const productDetail = allProductsMap.get(item.productId.toString());
-      
-      return {
-        ...item,
-        product: productDetail
-          ? {
-              id: productDetail._id.toString(),
-              _id: productDetail._id.toString(),
-              name: productDetail["Model Name"] || productDetail.name || "N/A",
-              description: productDetail.description || "N/A",
-              price: parseFloat(String(productDetail["Price"] || productDetail.price || '0').replace(/[^0-9.-]+/g, "")) || 0,
-              imageUrl: productDetail["Image URL"] || productDetail.imageUrl || "https://via.placeholder.com/150?text=No+Image",
-              category: item.category, // Carry over the category
-          }
-          : {
-              id: item.productId,
-              _id: item.productId,
-              name: "Product not found",
-              description: "The product associated with this item could not be found.",
-              price: 0,
-              imageUrl: "https://via.placeholder.com/150?text=Not+Found",
-              category: item.category,
-            }
-      };
-    });
+    // Map cart items with full product details, filtering out items for products that no longer exist.
+    const cartWithDetails = (allCartItems || [])
+      .map(item => {
+        const productDetail = allProductsMap.get(item.productId.toString());
+        
+        if (!productDetail) {
+          // This can happen if a product is deleted but still exists in a user's cart.
+          // We'll log it and filter it out from the response.
+          console.log(`Orphaned cart item found and removed: productId ${item.productId} for userId ${req.user.id}`);
+          return null;
+        }
 
+        return {
+          ...item,
+          product: {
+            id: productDetail._id.toString(),
+            _id: productDetail._id.toString(),
+            name: productDetail["Model Name"] || productDetail.name || "N/A",
+            description: productDetail.description || "N/A",
+            price: parseFloat(String(productDetail["Price"] || productDetail.price || '0').replace(/[^0-9.-]+/g, "")) || 0,
+            imageUrl: productDetail["Image URL"] || productDetail.imageUrl || "/placeholder.svg",
+            category: item.category, // Carry over the category
+          }
+        };
+      })
+      .filter(item => item !== null); // Remove the null entries (orphaned items)
+
+    if (returnData) {
+      return cartWithDetails;
+    }
     res.json(cartWithDetails);
   } catch (error) {
     console.error('Get cart error:', error);
@@ -450,7 +487,7 @@ export const updateCartItem = async (req, res) => {
     }
 
     const updatedCart = profile.cart.map(item =>
-      item._id && item._id.toString() === cartItemId
+      item.productId === cartItemId
         ? { ...item, quantity }
         : item
     );
@@ -468,73 +505,56 @@ export const updateCartItem = async (req, res) => {
 export const removeFromCart = async (req, res) => {
   try {
     const userId = req.user.id;
-    const cartItemId = req.params.itemId;
+    const productIdToRemove = req.params.itemId;
     const db = await dbPromise();
 
-    const profile = await db.collection('userprofiles').findOne({ userId });
-    if (!profile || !profile.cart) {
-      return res.status(404).json({ message: 'Cart not found' });
+    const result = await db.collection('userprofiles').findOneAndUpdate(
+      { userId },
+      { $pull: { cart: { productId: productIdToRemove } } },
+      { returnDocument: 'after' }
+    );
+
+    if (!result.value) {
+      return res.status(404).json({ message: 'User profile not found or item not in cart' });
     }
 
-    const updatedCart = profile.cart.filter(item => !(item._id && item._id.toString() === cartItemId));
-
-    await db.collection('userprofiles').updateOne(
-      { userId },
-      { $set: { cart: updatedCart } }
-    );
-    res.json(updatedCart);
+    res.json({ success: true, message: 'Item removed from cart.' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to remove from cart', error: error.message });
   }
 };
 
-export const clearCart = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const db = await dbPromise();
-
-    await db.collection('userprofiles').updateOne(
-      { userId },
-      { $set: { cart: [] } }
-    );
-    res.json([]);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to clear cart', error: error.message });
-  }
-};
-
 // Accessories Cart Controllers
-export const getAccessoriesCart = async (req, res) => {
+export const getAccessoriesCart = async (req, res, returnData = false) => {
   try {
     const db = await dbPromise();
-    const profile = await UserProfile.findOne(db, { userId: req.user.id });
-    
-    if (!profile) {
-      return res.json([]);
-    }
+    const profile = await db.collection('userprofiles').findOne({ userId: req.user.id });
 
-    const cartItems = profile.accessoriesCart || [];
-    if (cartItems.length === 0) {
-      return res.json([]);
-    }
-
-    // Return cart items with their stored product data
-    const cartWithDetails = cartItems.map(item => ({
-      _id: item._id,
-      productId: item.productId,
-      quantity: item.quantity,
-      category: 'accessories',
-      product: item.product || {
-        id: item.productId,
-        name: "N/A",
-        description: "N/A",
-        price: 0,
-        imageUrl: "https://via.placeholder.com/150?text=No+Image",
-        brand: "N/A",
-        category: "accessories"
+    if (!profile || !profile.accessoriesCart || profile.accessoriesCart.length === 0) {
+      if (returnData) {
+        return [];
       }
-    }));
+      return res.json([]);
+    }
 
+    const productIds = profile.accessoriesCart.map(item => item.productId);
+    const products = await db.collection('Accessories').find({ id: { $in: productIds } }).toArray();
+    const productsMap = new Map(products.map(p => [p.id, p]));
+
+    const cartWithDetails = (profile.accessoriesCart || []).map(item => {
+      const product = productsMap.get(item.productId);
+      return {
+        ...item,
+        product: product || {
+          name: 'Product not found',
+          price: 0
+        }
+      };
+    });
+
+    if (returnData) {
+      return cartWithDetails;
+    }
     res.json(cartWithDetails);
   } catch (error) {
     console.error('Get accessories cart error:', error);
@@ -546,63 +566,44 @@ export const addToAccessoriesCart = async (req, res) => {
   try {
     const userId = req.user.id;
     const db = await dbPromise();
-    const { productId, quantity = 1, product } = req.body;
+    const { productId, quantity = 1 } = req.body;
 
-    // Defensive: ensure productId is present
     if (!productId) {
       return res.status(400).json({ message: 'Product id is required for cart' });
     }
 
-    // Find user profile or create if not exists
-    let profile = await UserProfile.findOne(db, { userId });
-    if (!profile) {
-      profile = {
-        userId,
-        name: '',
-        email: '',
-        phone: '',
-        addresses: [],
-        orders: [],
-        wishlist: [],
-        cart: [],
-        accessoriesCart: [],
-        createdAt: new Date()
-      };
-      await UserProfile.insertOne(db, profile);
+    const product = await db.collection('Accessories').findOne({ id: productId });
+
+    if (!product) {
+      return res.status(404).json({ message: 'Accessory not found' });
     }
 
-    // Check if product already in cart
+    let profile = await db.collection('userprofiles').findOne({ userId });
+    if (!profile) {
+      profile = { userId, accessoriesCart: [], createdAt: new Date() };
+      await db.collection('userprofiles').insertOne(profile);
+    }
+
     const existingCartItem = (profile.accessoriesCart || []).find(item => item.productId === productId);
     let updatedCart;
     if (existingCartItem) {
-      updatedCart = (profile.accessoriesCart || []).map(item =>
+      updatedCart = profile.accessoriesCart.map(item =>
         item.productId === productId
           ? { ...item, quantity: item.quantity + quantity }
           : item
       );
     } else {
-      // Create new cart item with product details
       const newCartItem = {
         _id: new ObjectId(),
         productId,
         quantity,
-        product: {
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          price: product.price,
-          imageUrl: product.imageUrl,
-          brand: product.brand,
-          category: 'accessories',
-          stock: product.stock
-        },
+        product: { ...product, id: product.id, category: 'accessories' },
         addedAt: new Date()
       };
       updatedCart = [...(profile.accessoriesCart || []), newCartItem];
     }
 
-    await UserProfile.updateOne(
-      db,
+    await db.collection('userprofiles').updateOne(
       { userId },
       { $set: { accessoriesCart: updatedCart } }
     );
@@ -620,7 +621,7 @@ export const updateAccessoriesCartItem = async (req, res) => {
     const { quantity } = req.body;
     const db = await dbPromise();
 
-    const profile = await UserProfile.findOne(db, { userId });
+    const profile = await db.collection('userprofiles').findOne({ userId });
     if (!profile || !profile.accessoriesCart) {
       return res.status(404).json({ message: 'Cart not found' });
     }
@@ -631,8 +632,7 @@ export const updateAccessoriesCartItem = async (req, res) => {
         : item
     );
 
-    await UserProfile.updateOne(
-      db,
+    await db.collection('userprofiles').updateOne(
       { userId },
       { $set: { accessoriesCart: updatedCart } }
     );
@@ -649,15 +649,14 @@ export const removeFromAccessoriesCart = async (req, res) => {
     const cartItemId = req.params.itemId;
     const db = await dbPromise();
 
-    const profile = await UserProfile.findOne(db, { userId });
+    const profile = await db.collection('userprofiles').findOne({ userId });
     if (!profile || !profile.accessoriesCart) {
       return res.status(404).json({ message: 'Cart not found' });
     }
 
     const updatedCart = profile.accessoriesCart.filter(item => !(item._id && item._id.toString() === cartItemId));
 
-    await UserProfile.updateOne(
-      db,
+    await db.collection('userprofiles').updateOne(
       { userId },
       { $set: { accessoriesCart: updatedCart } }
     );
@@ -673,25 +672,49 @@ export const clearAccessoriesCart = async (req, res) => {
     const userId = req.user.id;
     const db = await dbPromise();
 
-    await UserProfile.updateOne(
-      db,
+    await db.collection('userprofiles').updateOne(
       { userId },
       { $set: { accessoriesCart: [] } }
     );
     res.json([]);
   } catch (error) {
     console.error('Clear accessories cart error:', error);
-    res.status(500).json({ message: 'Failed to clear accessories cart', error: error.message });
+    res.status(500).json({ message: 'Failed to clear cart', error: error.message });
   }
 };
 
 // Groceries Cart Controllers
-export const getGroceriesCart = async (req, res) => {
+export const getGroceriesCart = async (req, res, returnData = false) => {
   try {
-    const userId = req.user.id;
     const db = await dbPromise();
-    const profile = await UserProfile.findOne(db, { userId });
-    res.json(profile?.groceriesCart || []);
+    const profile = await db.collection('userprofiles').findOne({ userId: req.user.id });
+
+    if (!profile || !profile.groceriesCart || profile.groceriesCart.length === 0) {
+      if (returnData) {
+        return [];
+      }
+      return res.json([]);
+    }
+
+    const productIds = profile.groceriesCart.map(item => new ObjectId(item.productId));
+    const products = await db.collection('Grocery').find({ _id: { $in: productIds } }).toArray();
+    const productsMap = new Map(products.map(p => [p._id.toString(), p]));
+
+    const cartWithDetails = (profile.groceriesCart || []).map(item => {
+      const product = productsMap.get(item.productId.toString());
+      return {
+        ...item,
+        product: product || {
+          name: 'Product not found',
+          price: 0
+        }
+      };
+    });
+
+    if (returnData) {
+      return cartWithDetails;
+    }
+    res.json(cartWithDetails);
   } catch (error) {
     console.error('Get groceries cart error:', error);
     res.status(500).json({ message: 'Failed to get groceries cart', error: error.message });
@@ -701,18 +724,22 @@ export const getGroceriesCart = async (req, res) => {
 export const addToGroceriesCart = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { productId, quantity } = req.body;
+    const { productId, quantity = 1 } = req.body;
     const db = await dbPromise();
 
-    const product = await db.collection('Groceries').findOne({ _id: new ObjectId(productId) });
+    if (!productId) {
+      return res.status(400).json({ message: 'Product ID is required' });
+    }
+
+    const product = await db.collection('Grocery').findOne({ _id: new ObjectId(productId) });
     if (!product) {
       return res.status(404).json({ message: 'Grocery product not found' });
     }
 
-    let profile = await UserProfile.findOne(db, { userId });
+    let profile = await db.collection('userprofiles').findOne({ userId });
     if (!profile) {
       profile = { userId, groceriesCart: [], createdAt: new Date() };
-      await UserProfile.insertOne(db, profile);
+      await db.collection('userprofiles').insertOne(profile);
     }
 
     const existingCartItem = (profile.groceriesCart || []).find(item => item.productId === productId);
@@ -734,7 +761,10 @@ export const addToGroceriesCart = async (req, res) => {
       updatedCart = [...(profile.groceriesCart || []), newCartItem];
     }
 
-    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: updatedCart } });
+    await db.collection('userprofiles').updateOne(
+      { userId },
+      { $set: { groceriesCart: updatedCart } }
+    );
     res.json(updatedCart);
   } catch (error) {
     console.error('Add to groceries cart error:', error);
@@ -749,7 +779,7 @@ export const updateGroceriesCartItem = async (req, res) => {
     const { quantity } = req.body;
     const db = await dbPromise();
 
-    const profile = await UserProfile.findOne(db, { userId });
+    const profile = await db.collection('userprofiles').findOne({ userId });
     if (!profile || !profile.groceriesCart) {
       return res.status(404).json({ message: 'Groceries cart not found' });
     }
@@ -760,7 +790,10 @@ export const updateGroceriesCartItem = async (req, res) => {
         : item
     );
 
-    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: updatedCart } });
+    await db.collection('userprofiles').updateOne(
+      { userId },
+      { $set: { groceriesCart: updatedCart } }
+    );
     res.json(updatedCart);
   } catch (error) {
     console.error('Update groceries cart item error:', error);
@@ -774,14 +807,17 @@ export const removeFromGroceriesCart = async (req, res) => {
     const cartItemId = req.params.itemId;
     const db = await dbPromise();
 
-    const profile = await UserProfile.findOne(db, { userId });
+    const profile = await db.collection('userprofiles').findOne({ userId });
     if (!profile || !profile.groceriesCart) {
       return res.status(404).json({ message: 'Groceries cart not found' });
     }
 
     const updatedCart = profile.groceriesCart.filter(item => !(item._id && item._id.toString() === cartItemId));
 
-    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: updatedCart } });
+    await db.collection('userprofiles').updateOne(
+      { userId },
+      { $set: { groceriesCart: updatedCart } }
+    );
     res.json(updatedCart);
   } catch (error) {
     console.error('Remove from groceries cart error:', error);
@@ -794,10 +830,40 @@ export const clearGroceriesCart = async (req, res) => {
     const userId = req.user.id;
     const db = await dbPromise();
 
-    await UserProfile.updateOne(db, { userId }, { $set: { groceriesCart: [] } });
+    await db.collection('userprofiles').updateOne(
+      { userId },
+      { $set: { groceriesCart: [] } }
+    );
     res.json([]);
   } catch (error) {
     console.error('Clear groceries cart error:', error);
     res.status(500).json({ message: 'Failed to clear groceries cart', error: error.message });
   }
 };
+
+// Get All Carts
+export const getAllCarts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const db = await dbPromise();
+    const profile = await db.collection('userprofiles').findOne({ userId });
+
+    if (!profile) {
+      return res.json({ cart: [], accessoriesCart: [], groceriesCart: [] });
+    }
+
+    // Fetch all carts in parallel
+    const [accessoriesCart, groceriesCart, genericCart] = await Promise.all([
+      getAccessoriesCart(req, res, true), // pass flag to return data instead of sending response
+      getGroceriesCart(req, res, true),
+      getCart(req, res, true),
+    ]);
+
+    res.json({ accessoriesCart, groceriesCart, cart: genericCart });
+  } catch (error) {
+    console.error('Get all carts error:', error);
+    res.status(500).json({ message: 'Failed to get all carts', error: error.message });
+  }
+};
+
+ 

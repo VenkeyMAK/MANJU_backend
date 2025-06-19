@@ -15,7 +15,7 @@ const authMiddleware = (req, res, next) => {
   
   try {
     // Update secret to match the one used in login
-    const secret = 'manjumobiles123'; // Use the same secret everywhere
+    const secret = process.env.JWT_SECRET || 'manjumobiles123'; // Use the same secret everywhere
     const decoded = jwt.verify(token, secret);
     
     console.log('Decoded token:', decoded);
