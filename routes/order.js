@@ -4,7 +4,11 @@ import nodemailer from 'nodemailer';
 import Order from '../models/Order.js';
 import connectDB from '../db.js';
 import auth from '../middleware/auth.js';
+ 
+import { isAdmin } from '../middleware/role.js';
+ 
 import CommissionService from '../services/commissionService.js';
+ 
 
 dotenv.config();
 const router = express.Router();
@@ -99,5 +103,103 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-export default router;
+// Get all orders (for admin panel)
+router.get('/admin/orders', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const { 
+      page = 1, 
+      limit = 10, 
+      sortBy = 'createdAt', 
+      sortOrder = 'desc',
+      status,
+      paymentStatus
+    } = req.query;
 
+    const result = await Order.findAll(db, {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      sortBy,
+      sortOrder,
+      status,
+      paymentStatus
+    });
+
+    res.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination
+    });
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch orders' });
+  }
+});
+
+// Get order by ID
+router.get('/orders/:id', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const order = await Order.findById(db, req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    // Check if user is authorized to view this order
+    if (req.user.role !== 'admin' && order.user.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Not authorized to view this order' });
+    }
+
+    res.json({ success: true, data: order });
+  } catch (err) {
+    console.error('Error fetching order:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch order' });
+  }
+});
+
+// Update order status (admin only)
+router.patch('/admin/orders/:id/status', auth, isAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'Status is required' });
+    }
+
+    const db = await connectDB();
+    const result = await Order.updateStatus(db, req.params.id, status);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    res.json({ success: true, message: 'Order status updated successfully' });
+  } catch (err) {
+    console.error('Error updating order status:', err);
+    res.status(500).json({ success: false, error: 'Failed to update order status' });
+  }
+});
+
+// Update payment status (admin only)
+router.patch('/admin/orders/:id/payment-status', auth, isAdmin, async (req, res) => {
+  try {
+    const { paymentStatus } = req.body;
+    if (!paymentStatus) {
+      return res.status(400).json({ success: false, error: 'Payment status is required' });
+    }
+
+    const db = await connectDB();
+    const result = await Order.updatePaymentStatus(db, req.params.id, paymentStatus);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    res.json({ success: true, message: 'Payment status updated successfully' });
+  } catch (err) {
+    console.error('Error updating payment status:', err);
+    res.status(500).json({ success: false, error: 'Failed to update payment status' });
+  }
+});
+
+export default router;
