@@ -45,7 +45,7 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   }
 };
 
-router.post('/orders', auth, async (req, res) => {
+router.post('/', auth, async (req, res) => {
   try {
     const db = await connectDB();
     const orderData = {
@@ -88,7 +88,7 @@ router.post('/orders', auth, async (req, res) => {
   }
 });
 
-router.get('/orders', auth, async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const db = await connectDB();
     const orders = await Order.findByUserId(db, req.user.id);

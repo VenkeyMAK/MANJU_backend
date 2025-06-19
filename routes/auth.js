@@ -4,10 +4,12 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import dotenv from 'dotenv';
 
+dotenv.config();
+
 
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET  ; // Use environment variable or fallback
+const JWT_SECRET = process.env.JWT_SECRET || 'manjumobiles123'; // Use environment variable or fallback
 
 // Initialize Google OAuth client
 const googleClient = new OAuth2Client(

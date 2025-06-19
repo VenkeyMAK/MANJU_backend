@@ -19,6 +19,7 @@ import authRoutes from './routes/auth.js';
 import accessoriesRoutes from './routes/accessories.js';
 import orderRoutes from './routes/order.js';
 import userRoutes from './routes/userRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,11 +65,14 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/filters', filterRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api', orderRoutes);
+app.use('/api/orders', orderRoutes);
 
 // Add user routes
 app.use('/api/users', userRoutes);
 app.use('/api/groceries', groceryRoutes);
+
+// Add admin routes
+app.use('/api/admin', adminRoutes);
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');

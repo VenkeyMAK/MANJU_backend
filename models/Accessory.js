@@ -38,7 +38,7 @@ class Accessory {
             );
         } else {
             const result = await collection.insertOne(this);
-            this._id = result.insertedId;
+            this.id = result.insertedId;
         }
         return this;
     }

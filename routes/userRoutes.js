@@ -15,14 +15,23 @@ import {
   addToCart,
   updateCartItem,
   removeFromCart,
-  clearCart,
+  // clearCart,
   // Add new accessories cart controllers
   getAccessoriesCart,
   addToAccessoriesCart,
   updateAccessoriesCartItem,
   removeFromAccessoriesCart,
-  clearAccessoriesCart
+  clearAccessoriesCart,
+  // Add new groceries cart controllers
+  getGroceriesCart,
+  addToGroceriesCart,
+  updateGroceriesCartItem,
+  removeFromGroceriesCart,
+  clearGroceriesCart,
+  getAllCarts,
+  clearAllCarts
 } from '../controllers/userController.js';
+
 
 const router = express.Router();
 
@@ -44,12 +53,18 @@ router.get('/wishlist', auth, getWishlist);
 router.post('/wishlist', auth, addToWishlist);
 router.delete('/wishlist/:productId', auth, removeFromWishlist);
 
+// Get all carts route
+router.get('/cart/all', auth, getAllCarts);
+
+// Clear all carts route
+router.delete('/cart/all', auth, clearAllCarts);
+
 // Product Cart routes
 router.get('/cart', auth, getCart);
 router.post('/cart', auth, addToCart);
 router.put('/cart/:itemId', auth, updateCartItem);
 router.delete('/cart/:itemId', auth, removeFromCart);
-router.delete('/cart', auth, clearCart);
+// router.delete('/cart', auth, clearCart);
 
 // Accessories cart routes
 router.get('/accessories-cart', auth, getAccessoriesCart);
@@ -57,5 +72,12 @@ router.post('/accessories-cart', auth, addToAccessoriesCart);
 router.put('/accessories-cart/:itemId', auth, updateAccessoriesCartItem);
 router.delete('/accessories-cart/:itemId', auth, removeFromAccessoriesCart);
 router.delete('/accessories-cart', auth, clearAccessoriesCart);
+
+// Groceries cart routes
+router.get('/groceries-cart', auth, getGroceriesCart);
+router.post('/groceries-cart', auth, addToGroceriesCart);
+router.put('/groceries-cart/:itemId', auth, updateGroceriesCartItem);
+router.delete('/groceries-cart/:itemId', auth, removeFromGroceriesCart);
+router.delete('/groceries-cart', auth, clearGroceriesCart);
 
 export default router;

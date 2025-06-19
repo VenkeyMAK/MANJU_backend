@@ -28,6 +28,7 @@ const User = {
         walletBalance: 0,
         upline: [],
         referrerId: null,
+        role: 'user', // Add role field with default value
         createdAt: new Date(),
     };
 
