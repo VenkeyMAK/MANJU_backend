@@ -34,11 +34,13 @@ import wishlistRoutes from './routes/wishlist.js';
 import adminRoutes from './routes/adminRoutes.js';
  
 import customerRoutes from './routes/customer.js';
+ 
 import searchRoutes from './routes/search.js';
 import walletRoutes from './routes/walletRoutes.js';
 import authRoutes from './routes/auth.js';
-
-
+ 
+import erpRoutes from './routes/erp.js';
+ 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -86,6 +88,7 @@ app.use('/api/groceries', groceryRoutes);
 // Add admin routes
 app.use('/api/admin', adminRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/erp', erpRoutes);
 
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);

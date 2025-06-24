@@ -335,7 +335,94 @@ export const getWishlist = async (req, res) => {
   }
 };
 
-// Cart Controllers
+/// Cart Controllers
+export const updateCartQuantity = async (req, res) => {
+  try {
+    const { productId, category, quantity } = req.body;
+    
+    // Validate input
+    if (!productId || !category || quantity === undefined) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Missing required fields'
+      });
+    }
+
+    if (quantity < 1 || quantity > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be between 1 and 100'
+      });
+    }
+
+    const db = await dbPromise();
+    const profile = await db.collection('userprofiles').findOne({ userId: req.user.id });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'User profile not found'
+      });
+    }
+
+    let cartToUpdate;
+    
+    // Get the appropriate cart based on category
+    switch (category) {
+      case 'products':
+        cartToUpdate = profile.cart || [];
+        break;
+      case 'accessories':
+        cartToUpdate = profile.accessoriesCart || [];
+        break;
+      case 'groceries':
+        cartToUpdate = profile.groceriesCart || [];
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid category'
+        });
+    }
+
+    // Update the cart item
+    const updatedCart = cartToUpdate.map(item => 
+      item.productId === productId ? { ...item, quantity } : item
+    );
+
+    // Update the cart in the database
+    const result = await db.collection('userprofiles').updateOne(
+      { userId: req.user.id },
+      { $set: {
+        [category === 'products' ? 'cart' : `${category}Cart`]: updatedCart
+      } }
+    );
+
+    // Find the updated item to return
+    const updatedItem = updatedCart.find(item => item.productId === productId);
+
+    if (!updatedItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cart item not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      updatedItem,
+      message: 'Cart quantity updated successfully'
+    });
+  } catch (error) {
+    console.error('Update cart quantity error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 export const getCart = async (req, res, returnData = false) => {
   try {
     const userId = req.user.id;

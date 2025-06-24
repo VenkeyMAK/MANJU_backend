@@ -115,7 +115,8 @@ router.get('/admin/orders', auth, async (req, res) => {
       sortBy = 'createdAt', 
       sortOrder = 'desc',
       status,
-      paymentStatus
+      paymentStatus,
+      search
     } = req.query;
 
     const result = await Order.findAll(db, {
@@ -124,7 +125,8 @@ router.get('/admin/orders', auth, async (req, res) => {
       sortBy,
       sortOrder,
       status,
-      paymentStatus
+      paymentStatus,
+      search: search?.trim()
     });
 
     res.json({
@@ -168,6 +170,15 @@ router.patch('/admin/orders/:id/status', auth, isAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Status is required' });
     }
 
+    // Validate status value
+    const validStatuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid status. Must be one of: ' + validStatuses.join(', ') 
+      });
+    }
+
     const db = await connectDB();
     const result = await Order.updateStatus(db, req.params.id, status);
     
@@ -175,7 +186,14 @@ router.patch('/admin/orders/:id/status', auth, isAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    res.json({ success: true, message: 'Order status updated successfully' });
+    // Get the updated order to return in response
+    const updatedOrder = await Order.findById(db, req.params.id);
+    
+    res.json({ 
+      success: true, 
+      message: 'Order status updated successfully',
+      order: updatedOrder
+    });
   } catch (err) {
     console.error('Error updating order status:', err);
     res.status(500).json({ success: false, error: 'Failed to update order status' });
