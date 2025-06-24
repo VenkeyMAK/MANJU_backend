@@ -6,6 +6,7 @@ import auth from '../middleware/auth.js';
 import User from '../models/User.js';
 import WalletTransaction from '../models/WalletTransaction.js';
 import Order from '../models/Order.js';
+import Notification from '../models/Notification.js';
 import connectDB from '../db.js';
 import CommissionService from '../services/commissionService.js';
 
@@ -96,68 +97,79 @@ router.get('/transactions', auth, async (req, res) => {
 // @desc    Create an order using wallet balance
 // @access  Private
 router.post('/purchase', auth, async (req, res) => {
-    const { total, ...orderDataWithoutTotal } = req.body;
+    const { total, ...orderData } = req.body;
 
-    if (!total || total <= 0) {
+    if (!total || !Number.isFinite(total) || total <= 0) {
         return res.status(400).json({ msg: 'Invalid order total.' });
     }
 
+    const db = await connectDB();
+    const client = db.client;
+    const session = client.startSession();
+
+    let savedOrder;
+
     try {
-        const db = await connectDB();
-        const user = await User.findById(req.user.id);
+        await session.withTransaction(async () => {
+            const user = await db.collection('users').findOne({ _id: new ObjectId(req.user.id) }, { session });
 
-        if (!user) {
-            return res.status(404).json({ msg: 'User not found' });
-        }
-        if (user.walletBalance < total) {
-            return res.status(400).json({ msg: 'Insufficient wallet balance.' });
-        }
+            if (!user) {
+                throw new Error('User not found');
+            }
+            if ((user.walletBalance || 0) < total) {
+                throw new Error('Insufficient wallet balance.');
+            }
 
-        const orderPayload = {
-            ...orderDataWithoutTotal,
-            total,
-            user: req.user.id,
-            paymentMethod: 'Wallet',
-            status: 'Paid'
-        };
-        const order = await Order.create(db, orderPayload);
+            const orderCollection = db.collection('orders');
+            const orderNumber = `ORD-${Date.now()}`;
+            const newOrder = {
+                ...orderData,
+                orderNumber,
+                total,
+                user: new ObjectId(req.user.id),
+                paymentMethod: 'Wallet',
+                status: 'Paid',
+                createdAt: new Date()
+            };
+            const orderResult = await orderCollection.insertOne(newOrder, { session });
+            savedOrder = { ...newOrder, _id: orderResult.insertedId };
 
-        // Deduct from wallet and create transaction
-        user.walletBalance -= total;
-        await user.save();
+            const debitTransaction = {
+                userId: new ObjectId(req.user.id),
+                amount: -total,
+                type: 'debit',
+                description: `Purchase for Order ${orderNumber}`,
+                status: 'completed',
+                relatedOrderId: savedOrder._id,
+                createdAt: new Date()
+            };
+            await db.collection('wallet_transactions').insertOne(debitTransaction, { session });
 
-        const transaction = new WalletTransaction({
-            user: req.user.id,
-            amount: -total,
-            type: 'debit',
-            description: `Purchase for Order #${order.orderNumber}`,
+            await User.updateWalletBalance(req.user.id, -total, session);
+
+            await CommissionService.distribute(savedOrder);
         });
-        await transaction.save();
 
-        await CommissionService.distribute(order);
-
-        try {
-            await sendEmailWithRetry({
-                from: process.env.EMAIL_USER || 'murugan@arjanapartners.in',
-                to: order.email,
-                subject: `Order Confirmation - ${order.orderNumber}`,
-                html: `
-                  <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h3>Your order has been successfully paid for using your wallet!</h3>
-                    <p>Order Number: <strong>${order.orderNumber}</strong></p>
-                    <p>Total: ₹${order.total}</p>
-                  </div>
-                `
-            });
-        } catch (emailError) {
-            console.error('Wallet purchase email sending failed:', emailError);
+        if (savedOrder) {
+            try {
+                await sendEmailWithRetry({
+                    from: process.env.EMAIL_USER || 'murugan@arjanapartners.in',
+                    to: savedOrder.email,
+                    subject: `Order Confirmation - ${savedOrder.orderNumber}`,
+                    html: `<p>Your order ${savedOrder.orderNumber} has been confirmed and paid with your wallet.</p>`
+                });
+            } catch (emailError) {
+                console.error(`Post-purchase email failed for order ${savedOrder.orderNumber}:`, emailError);
+            }
         }
 
-        res.status(201).json({ success: true, message: 'Purchase successful!', order });
+        res.status(201).json({ message: 'Purchase successful', orderId: savedOrder._id });
 
-    } catch (err) {
-        console.error('Wallet purchase error:', err);
-        res.status(500).send('Server Error');
+    } catch (error) {
+        console.error('Wallet purchase transaction failed:', error);
+        res.status(500).json({ msg: error.message || 'Server Error' });
+    } finally {
+        await session.endSession();
     }
 });
 

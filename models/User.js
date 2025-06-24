@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import connectDB from '../db.js';
+import Notification from './Notification.js';
 
 const User = {
   generateReferralCode() {
@@ -28,7 +29,7 @@ const User = {
         walletBalance: 0,
         upline: [],
         referrerId: null,
-        role: 'user', // Add role field with default value
+        role: userData.role || 'user', // Set role from userData or default to 'user'
         createdAt: new Date(),
     };
 
@@ -84,11 +85,35 @@ const User = {
   async updateWalletBalance(userId, amount, session) {
     const db = await connectDB();
     const usersCollection = db.collection('users');
-    return await usersCollection.updateOne(
+
+    const userBeforeUpdate = await usersCollection.findOne({ _id: new ObjectId(userId) }, { projection: { walletBalance: 1, name: 1 }, session });
+    if (!userBeforeUpdate) {
+      console.error(`User with ID ${userId} not found for wallet update.`);
+      return;
+    }
+    const oldBalance = userBeforeUpdate.walletBalance || 0;
+    const newBalance = oldBalance + amount;
+
+    const result = await usersCollection.updateOne(
       { _id: new ObjectId(userId) },
       { $inc: { walletBalance: amount }, $set: { updatedAt: new Date() } },
       { session }
     );
+
+    const THRESHOLD = 10000;
+    if (newBalance >= THRESHOLD && oldBalance < THRESHOLD) {
+      Notification.create({
+        userId: userBeforeUpdate._id,
+        userName: userBeforeUpdate.name,
+        type: 'threshold_reached',
+        message: `Wallet balance has reached ₹${newBalance.toFixed(2)}`,
+        relatedData: {
+          newBalance: newBalance
+        }
+      }).catch(err => console.error('Failed to create threshold notification:', err));
+    }
+
+    return result;
   }
 };
 
