@@ -47,18 +47,31 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
 };
 
 // GET /api/wallet/balance - Get user's wallet balance
-router.get('/balance', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const collection = db.collection('wallets');
-        // For now, return a default balance since we don't have user authentication yet
-        res.json({ balance: 1000 });
-    } catch (err) {
-        console.error('Error fetching wallet balance:', err);
-        res.status(500).json({ error: 'Failed to fetch wallet balance', details: err.message });
-    }
-});
+router.get('/balance', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(req.user.id) }
+    );
 
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const transactions = await WalletTransaction.findByUserId(req.user.id);
+    
+    res.json({
+      walletBalance: user.walletBalance || 0,
+      transactions: transactions || []
+    });
+  } catch (err) {
+    console.error('Error fetching wallet:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch wallet',
+      details: err.message 
+    });
+  }
+});
 // @route   GET api/wallet/transactions
 // @desc    Get current user's wallet transaction history
 // @access  Private

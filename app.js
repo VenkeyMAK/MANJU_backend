@@ -21,7 +21,9 @@ import adminRoutes from './routes/adminRoutes.js';
 import customerRoutes from './routes/customer.js';
 import searchRoutes from './routes/search.js';
 import walletRoutes from './routes/walletRoutes.js';
+import authRoutes from './routes/auth.js';
 import userRoutes from './routes/userRoutes.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,7 +34,7 @@ const app = express();
 app.use(cors({
   origin: ['http://localhost:8080', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+  allowedHeaders: ['Content-Type', 'Authorization','x-auth-token'],
   credentials: true
 }));
 
@@ -84,6 +86,8 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
+
 
 // Basic health check route
 app.get('/health', (req, res) => {
