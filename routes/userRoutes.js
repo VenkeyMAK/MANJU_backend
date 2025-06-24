@@ -31,7 +31,8 @@ import {
   getAllCarts,
   clearAllCarts
 } from '../controllers/userController.js';
-
+import { ObjectId } from 'mongodb';
+import connectDB from '../db.js';
 
 const router = express.Router();
 
@@ -79,5 +80,31 @@ router.post('/groceries-cart', auth, addToGroceriesCart);
 router.put('/groceries-cart/:itemId', auth, updateGroceriesCartItem);
 router.delete('/groceries-cart/:itemId', auth, removeFromGroceriesCart);
 router.delete('/groceries-cart', auth, clearGroceriesCart);
+
+// GET /api/users/cart/all - Get user's cart
+router.get('/cart/all', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const collection = db.collection('cart');
+        const cartItems = await collection.find({}).toArray();
+        res.json(cartItems);
+    } catch (err) {
+        console.error('Error fetching cart:', err);
+        res.status(500).json({ error: 'Failed to fetch cart', details: err.message });
+    }
+});
+
+// GET /api/users/wishlist - Get user's wishlist
+router.get('/wishlist', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const collection = db.collection('wishlist');
+        const wishlistItems = await collection.find({}).toArray();
+        res.json(wishlistItems);
+    } catch (err) {
+        console.error('Error fetching wishlist:', err);
+        res.status(500).json({ error: 'Failed to fetch wishlist', details: err.message });
+    }
+});
 
 export default router;
