@@ -562,6 +562,8 @@ export const getAccessoriesCart = async (req, res, returnData = false) => {
   }
 };
 
+
+
 export const addToAccessoriesCart = async (req, res) => {
   try {
     const userId = req.user.id;

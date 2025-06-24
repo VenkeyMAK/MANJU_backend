@@ -1,48 +1,55 @@
 import express from 'express';
-import groceryRoutes from './routes/grocery.js';
 import cors from 'cors';
-import path from 'path';
 import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import multer from 'multer';
 import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';  // Import dotenv
 
 // Load environment variables
 dotenv.config();
 
+// Import routes
 import productRoutes from './routes/product.js';
+ 
 import dbPromise from './db.js';
 import filterRoutes from './routes/filters.js';
 import reviewsRoutes from './routes/reviews.js';
-import walletRoutes from './routes/walletRoutes.js';
+
 import referralRoutes from './routes/referralRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
-import authRoutes from './routes/auth.js';
+ 
 import accessoriesRoutes from './routes/accessories.js';
 import orderRoutes from './routes/order.js';
 import userRoutes from './routes/userRoutes.js';
-import adminRoutes from './routes/admin.js';
+ 
 import authMiddleware from './middleware/auth.js';
 import { isAdmin } from './middleware/role.js';
+ 
+ 
+import groceryRoutes from './routes/grocery.js';
+import cartRoutes from './routes/cart.js';
+import wishlistRoutes from './routes/wishlist.js';
+import adminRoutes from './routes/adminRoutes.js';
+ 
 import customerRoutes from './routes/customer.js';
+import searchRoutes from './routes/search.js';
+import walletRoutes from './routes/walletRoutes.js';
+import authRoutes from './routes/auth.js';
+
+
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
 
 const app = express();
 
-// Update CORS configuration
-const allowedOrigins = ['http://localhost:8080', 'http://localhost:3000'];
-
+// Enable CORS for all routes with proper configuration
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: ['http://localhost:8080', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+  allowedHeaders: ['Content-Type', 'Authorization','x-auth-token'],
   credentials: true
 }));
 
@@ -61,6 +68,7 @@ app.use((err, req, res, next) => {
   });
 });
 
+ 
 // Mount routes
 app.use('/api/products', productRoutes);
 app.use('/api/accessories', accessoriesRoutes);
@@ -71,8 +79,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/filters', filterRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
-
-// Add user routes
+ 
 app.use('/api/users', userRoutes);
 app.use('/api/groceries', groceryRoutes);
 
@@ -80,61 +87,57 @@ app.use('/api/groceries', groceryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/customers', customerRoutes);
 
+app.use('/api/cart', cartRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/search', searchRoutes);
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
-const avatarsDir = path.join(uploadsDir, 'avatars');
-
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-if (!fs.existsSync(avatarsDir)) {
-  fs.mkdirSync(avatarsDir);
-}
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Basic route
-app.get('/', (req, res) => {
-  res.send('Welcome to the API!');
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
 });
 
-// Database connection and server startup
+const upload = multer({ storage: storage });
+
+// Serve static files from the uploads directory
+app.use('/uploads', express.static('uploads'));
+
+// Basic health check route
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
+
 const PORT = process.env.PORT || 5000;
 
-async function startServer() {
-  try {
-    // Ensure database connection before starting server
-    const db = await dbPromise();
-    console.log('Database connection established');
-
-    // Start server after successful database connection
-    const server = app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    }).on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.log(`Port ${PORT} is busy, trying port ${PORT + 1}`);
-        app.listen(PORT + 1, () => {
-          console.log(`Server is running on port ${PORT + 1}`);
-        });
-      } else {
-        console.error('Server error:', err);
-      }
+// Start server with error handling
+const server = app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`Port ${PORT} is busy, trying port ${PORT + 1}`);
+    app.listen(PORT + 1, () => {
+      console.log(`Server is running on port ${PORT + 1}`);
     });
-
-    // Handle server shutdown
-    process.on('SIGTERM', () => {
-      console.log('SIGTERM received. Shutting down gracefully...');
-      server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-      });
-    });
-
-  } catch (err) {
-    console.error('Failed to start server:', err);
-    process.exit(1);
+  } else {
+    console.error('Server error:', err);
   }
-}
+});
 
-startServer();
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});

@@ -4,11 +4,9 @@ import nodemailer from 'nodemailer';
 import Order from '../models/Order.js';
 import connectDB from '../db.js';
 import auth from '../middleware/auth.js';
- 
 import { isAdmin } from '../middleware/role.js';
- 
 import CommissionService from '../services/commissionService.js';
- 
+import { ObjectId } from 'mongodb';
 
 dotenv.config();
 const router = express.Router();
@@ -49,47 +47,51 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   }
 };
 
-router.post('/', auth, async (req, res) => {
-  try {
-    const db = await connectDB();
-    const orderData = {
-      ...req.body,
-      user: req.user.id
-    };
-
-    const order = await Order.create(db, orderData);
-
+// GET /api/orders - Get all orders
+router.get('/', async (req, res) => {
     try {
-      await sendEmailWithRetry({
-        from: process.env.EMAIL_USER || 'murugan@arjanapartners.in',
-        to: orderData.email,
-        subject: `Order Confirmation - ${order.orderNumber}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h3>Thank you for your order!</h3>
-            <p>Order Number: <strong>${order.orderNumber}</strong></p>
-            <p>Total: ₹${order.total}</p>
-            <p>We'll contact you at: ${order.mobile}</p>
-          </div>
-        `
-      });
-    } catch (emailError) {
-      console.error('Email sending failed:', emailError);
-      // Continue with order processing even if email fails
+        const db = await connectDB();
+        const collection = db.collection('orders');
+        const orders = await collection.find({}).toArray();
+        res.json(orders);
+    } catch (err) {
+        console.error('Error fetching orders:', err);
+        res.status(500).json({ error: 'Failed to fetch orders', details: err.message });
     }
+});
 
-    // Distribute commissions after successful order creation
-    await CommissionService.distribute(order);
+// POST /api/orders - Create new order
+router.post('/', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const collection = db.collection('orders');
+        const order = {
+            ...req.body,
+            createdAt: new Date(),
+            status: 'pending'
+        };
+        const result = await collection.insertOne(order);
+        res.status(201).json(result);
+    } catch (err) {
+        console.error('Error creating order:', err);
+        res.status(500).json({ error: 'Failed to create order', details: err.message });
+    }
+});
 
-    res.status(201).json({
-      success: true,
-      message: 'Order placed successfully',
-      order
-    });
-  } catch (err) {
-    console.error('Error creating order:', err);
-    res.status(500).json({ error: 'Failed to place order' });
-  }
+// GET /api/orders/:id - Get order by ID
+router.get('/:id', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const collection = db.collection('orders');
+        const order = await collection.findOne({ _id: new ObjectId(req.params.id) });
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+        res.json(order);
+    } catch (err) {
+        console.error('Error fetching order:', err);
+        res.status(500).json({ error: 'Failed to fetch order', details: err.message });
+    }
 });
 
 router.get('/', auth, async (req, res) => {

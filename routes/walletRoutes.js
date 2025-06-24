@@ -47,10 +47,7 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   }
 };
 
-
-// @route   GET api/wallet/balance
-// @desc    Get current user's wallet balance
-// @access  Private
+// GET /api/wallet/balance - Get user's wallet balance
 router.get('/balance', auth, async (req, res) => {
   try {
     const db = await connectDB();
@@ -76,7 +73,6 @@ router.get('/balance', auth, async (req, res) => {
     });
   }
 });
-
 // @route   GET api/wallet/transactions
 // @desc    Get current user's wallet transaction history
 // @access  Private
@@ -172,6 +168,5 @@ router.post('/purchase', auth, async (req, res) => {
         await session.endSession();
     }
 });
-
 
 export default router;
