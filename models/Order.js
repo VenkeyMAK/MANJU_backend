@@ -5,6 +5,7 @@ const Order = {
     const collection = db.collection('orders');
     const result = await collection.insertOne({
       ...orderData,
+      items: orderData.items || [],
       createdAt: new Date(),
       status: orderData.status || 'pending',
       paymentStatus: orderData.paymentStatus || 'unpaid'

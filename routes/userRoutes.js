@@ -15,6 +15,7 @@ import {
   addToCart,
   updateCartItem,
   removeFromCart,
+  updateCartQuantity,
   // clearCart,
   // Add new accessories cart controllers
   getAccessoriesCart,
@@ -64,6 +65,7 @@ router.get('/cart', auth, getCart);
 router.post('/cart', auth, addToCart);
 router.put('/cart/:itemId', auth, updateCartItem);
 router.delete('/cart/:itemId', auth, removeFromCart);
+router.patch('/cart/update-quantity', auth, updateCartQuantity);
 // router.delete('/cart', auth, clearCart);
 
 // Accessories cart routes

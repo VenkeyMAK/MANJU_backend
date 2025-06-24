@@ -1,4 +1,5 @@
 import express from 'express';
+import { ObjectId } from 'mongodb';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import auth from '../middleware/auth.js';
@@ -51,14 +52,27 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
 // @access  Private
 router.get('/balance', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const db = await connectDB();
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(req.user.id) }
+    );
+
     if (!user) {
-      return res.status(404).json({ msg: 'User not found' });
+      return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ walletBalance: user.walletBalance || 0 });
+
+    const transactions = await WalletTransaction.findByUserId(req.user.id);
+    
+    res.json({
+      walletBalance: user.walletBalance || 0,
+      transactions: transactions || []
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error('Error fetching wallet:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch wallet',
+      details: err.message 
+    });
   }
 });
 
@@ -67,11 +81,14 @@ router.get('/balance', auth, async (req, res) => {
 // @access  Private
 router.get('/transactions', auth, async (req, res) => {
   try {
-    const transactions = await WalletTransaction.find({ user: req.user.id }).sort({ date: -1 });
+    const transactions = await WalletTransaction.findByUserId(req.user.id);
     res.json(transactions);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error('Error fetching transactions:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch transactions',
+      details: err.message 
+    });
   }
 });
 

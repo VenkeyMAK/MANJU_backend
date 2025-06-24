@@ -13,6 +13,9 @@ const grocerySchema = new mongoose.Schema({
   original_price: { type: Number },
   discount: { type: Number },
   main_category: { type: String, default: 'groceries' },
+  costPrice: { type: Number, default: 0 },
+  minStock: { type: Number, default: 10 },
+  maxStock: { type: Number, default: 150 },
 }, {
   timestamps: true,
   collection: 'groceries' // Explicitly set collection name
