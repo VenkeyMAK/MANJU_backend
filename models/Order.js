@@ -22,7 +22,8 @@ const Order = {
 
   async findByUserId(db, userId) {
     const collection = db.collection('orders');
-    return await collection.find({ user: userId })
+    // Convert userId string to ObjectId for correct matching
+    return await collection.find({ user: new ObjectId(userId) })
       .sort({ createdAt: -1 })
       .toArray();
   },

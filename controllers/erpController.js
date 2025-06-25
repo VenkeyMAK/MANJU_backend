@@ -135,14 +135,16 @@ const calculateInventoryMetrics = async (db) => {
     return {
       inventoryLevels,
       inventoryMovement,
-      lowStockAlerts
+      lowStockAlerts,
+      allProducts
     };
   } catch (error) {
     console.error('Error calculating inventory metrics:', error);
     return {
       inventoryLevels: {},
       inventoryMovement: [],
-      lowStockAlerts: []
+      lowStockAlerts: [],
+      allProducts: []
     };
   }
 };
@@ -220,12 +222,11 @@ export const getDashboardData = async (req, res) => {
       ? ((last30DaysRevenue - prev30DaysRevenue) / prev30DaysRevenue) * 100
       : (last30DaysRevenue > 0 ? 100 : 0);
 
-    // Calculate total inventory value
-    const totalInventoryValue = calculateInventoryValue([...inventoryMetrics.lowStockAlerts]);
+    // Calculate total inventory value from all products
+    const totalInventoryValue = calculateInventoryValue(inventoryMetrics.allProducts);
 
-    // Calculate operational costs based on sales volume
-    const operationalCosts = financials.totalOrders * 1000; // $1000 per order as operational cost
-    const totalExpenses = financials.totalCOGS + operationalCosts;
+    // Calculate operational costs (removed mock calculation)
+    const totalExpenses = financials.totalCOGS; // Expenses are currently just the cost of goods sold
     const netProfit = financials.totalRevenue - totalExpenses;
 
     res.json({

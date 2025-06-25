@@ -47,54 +47,74 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   }
 };
 
-// GET /api/orders - Get all orders
-router.get('/', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const collection = db.collection('orders');
-        const orders = await collection.find({}).toArray();
-        res.json(orders);
-    } catch (err) {
-        console.error('Error fetching orders:', err);
-        res.status(500).json({ error: 'Failed to fetch orders', details: err.message });
-    }
-});
+
 
 // POST /api/orders - Create new order
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req, res) => {
     try {
         const db = await connectDB();
-        const collection = db.collection('orders');
-        const order = {
-            ...req.body,
-            createdAt: new Date(),
-            status: 'pending'
+        const { items, shippingInfo, email, mobile, paymentMethod, total } = req.body;
+
+        if (!items || items.length === 0) {
+            return res.status(400).json({ error: 'Order must contain at least one item.' });
+        }
+
+        // Enrich items with category and costPrice from the database
+        const enrichedItems = await Promise.all(items.map(async (item) => {
+            const productCollections = [db.collection('Products'), db.collection('Accessories'), db.collection('groceries')];
+            let productDoc = null;
+
+            if (ObjectId.isValid(item.product)) {
+                const productId = new ObjectId(item.product);
+                for (const collection of productCollections) {
+                    productDoc = await collection.findOne({ _id: productId });
+                    if (productDoc) break;
+                }
+            }
+
+            // Use existing item data as a base, and enrich it if product is found
+            const baseItem = {
+                product: item.product,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                image: item.image,
+                category: 'Uncategorized', // Default category
+                costPrice: item.price * 0.8 // Default cost price estimation
+            };
+
+            if (productDoc) {
+                baseItem.category = productDoc.category || 'Uncategorized';
+                // Use the actual cost price if available, otherwise estimate it
+                baseItem.costPrice = productDoc.costPrice || (productDoc.Price || productDoc.price) * 0.8;
+            }
+            
+            return baseItem;
+        }));
+
+        const orderData = {
+            user: new ObjectId(req.user.id),
+            items: enrichedItems,
+            total,
+            shippingInfo,
+            email,
+            mobile,
+            paymentMethod,
         };
-        const result = await collection.insertOne(order);
-        res.status(201).json(result);
+
+        const newOrder = await Order.create(db, orderData);
+        
+        res.status(201).json({ success: true, data: newOrder });
+
     } catch (err) {
         console.error('Error creating order:', err);
         res.status(500).json({ error: 'Failed to create order', details: err.message });
     }
 });
 
-// GET /api/orders/:id - Get order by ID
-router.get('/:id', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const collection = db.collection('orders');
-        const order = await collection.findOne({ _id: new ObjectId(req.params.id) });
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
-        res.json(order);
-    } catch (err) {
-        console.error('Error fetching order:', err);
-        res.status(500).json({ error: 'Failed to fetch order', details: err.message });
-    }
-});
 
-router.get('/', auth, async (req, res) => {
+
+router.get('/my-orders', auth, async (req, res) => {
   try {
     const db = await connectDB();
     const orders = await Order.findByUserId(db, req.user.id);
