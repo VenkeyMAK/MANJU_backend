@@ -31,7 +31,7 @@ import { isAdmin } from './middleware/role.js';
 import groceryRoutes from './routes/grocery.js';
 import cartRoutes from './routes/cart.js';
 import wishlistRoutes from './routes/wishlist.js';
-import adminRoutes from './routes/admin.js';
+import adminRoutes from './routes/adminRoutes.js';
  
 import customerRoutes from './routes/customer.js';
  
