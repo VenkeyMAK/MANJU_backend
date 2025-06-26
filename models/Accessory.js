@@ -16,6 +16,10 @@ class Accessory {
         this.category = data.category;
         this.description = data.description;
         this.visual_cue = data.visual_cue;
+        this.stock = data.stock || 0;
+        this.costPrice = data.costPrice || 0;
+        this.minStock = data.minStock || 10;
+        this.maxStock = data.maxStock || 100;
     }
 
     static async findById(db, id) {

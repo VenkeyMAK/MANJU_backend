@@ -2,6 +2,20 @@
 
 This is the backend API for Manju Mobiles, a full-featured e-commerce platform built with Node.js, Express, and MongoDB. It includes complete functionality for product management, user authentication, order processing, and a sophisticated 100-level MLM (Multi-Level Marketing) and referral system.
 
+# Create Admin
+http://localhost:5000/api/admin/create-admin
+header
+{
+    "Content-Type": "application/json"
+    x-auth-token": "admin_token"
+}
+ body
+{
+    "name": "Admin",
+    "email": "admin@admin.com",
+    "password": "admin"
+}
+
 ## Features
 
 - **Product Management**: Full CRUD operations for products and accessories.
@@ -88,8 +102,8 @@ The core of the incentive program is a 100-level MLM system designed to reward b
 2.  **Purchase**: When User B makes a purchase, the system calculates the profit margin on that order.
 
 3.  **Commission Split**: The profit margin is split:
-    -   **20%** is retained by the company.
-    -   The remaining **80%** is split equally:
+    -   **50%** is retained by the company.
+    -   The remaining **50%** is split equally:
         -   **50%** goes to the buyer (User B) as instant cashback.
         -   **50%** is distributed among the upline (User A and their referrers) as commission.
 

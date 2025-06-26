@@ -12,18 +12,35 @@ dotenv.config();
 
 // Import routes
 import productRoutes from './routes/product.js';
-import accessoryRoutes from './routes/accessories.js';
+ 
+import dbPromise from './db.js';
+import filterRoutes from './routes/filters.js';
+import reviewsRoutes from './routes/reviews.js';
+
+import referralRoutes from './routes/referralRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+ 
+import accessoriesRoutes from './routes/accessories.js';
+import orderRoutes from './routes/order.js';
+import userRoutes from './routes/userRoutes.js';
+ 
+import authMiddleware from './middleware/auth.js';
+import { isAdmin } from './middleware/role.js';
+ 
+ 
 import groceryRoutes from './routes/grocery.js';
 import cartRoutes from './routes/cart.js';
 import wishlistRoutes from './routes/wishlist.js';
-import orderRoutes from './routes/order.js';
 import adminRoutes from './routes/adminRoutes.js';
+ 
 import customerRoutes from './routes/customer.js';
+ 
 import searchRoutes from './routes/search.js';
 import walletRoutes from './routes/walletRoutes.js';
 import authRoutes from './routes/auth.js';
-import userRoutes from './routes/userRoutes.js';
-
+ 
+import erpRoutes from './routes/erp.js';
+ 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,6 +70,30 @@ app.use((err, req, res, next) => {
   });
 });
 
+ 
+// Mount routes
+app.use('/api/products', productRoutes);
+app.use('/api/accessories', accessoriesRoutes);
+app.use('/api/reviews', reviewsRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/referral', referralRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/filters', filterRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/orders', orderRoutes);
+ 
+app.use('/api/users', userRoutes);
+app.use('/api/groceries', groceryRoutes);
+
+// Add admin routes
+app.use('/api/admin', adminRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/erp', erpRoutes);
+
+app.use('/api/cart', cartRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/search', searchRoutes);
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -73,21 +114,6 @@ const upload = multer({ storage: storage });
 
 // Serve static files from the uploads directory
 app.use('/uploads', express.static('uploads'));
-
-// Mount all routes
-app.use('/api/products', productRoutes);
-app.use('/api/accessories', accessoryRoutes);
-app.use('/api/groceries', groceryRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/wishlist', wishlistRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/search', searchRoutes);
-app.use('/api/wallet', walletRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/auth', authRoutes);
-
 
 // Basic health check route
 app.get('/health', (req, res) => {

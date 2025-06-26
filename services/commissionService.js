@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId } from 'mongodb';
 import connectDB from '../db.js';
+import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import WalletTransaction from '../models/WalletTransaction.js';
 
@@ -43,14 +44,31 @@ const CommissionService = {
 
         // 1. Credit buyer's cashback
         if (buyerCashback > 0) {
-          await User.updateWalletBalance(buyer._id, buyerCashback, session);
-          await WalletTransaction.create({
+          const cashbackToBuyer = buyerCashback;
+          await User.updateWalletBalance(buyer._id, cashbackToBuyer, session);
+          const cashbackTransaction = {
             userId: buyer._id,
-            amount: buyerCashback,
+            amount: cashbackToBuyer,
             type: 'cashback',
             description: `Cashback for order ${order.orderNumber}`,
-            relatedOrderId: order._id,
-          }, session);
+            status: 'completed',
+            relatedOrderId: order._id
+          };
+          await db.collection('wallet_transactions').insertOne(cashbackTransaction, { session });
+
+          // Create notification for cashback
+          await Notification.create({
+            userId: buyer._id,
+            userName: buyer.name,
+            type: 'cashback',
+            message: `Cashback of ₹${buyerCashback.toFixed(2)} for order ${order.orderNumber}`,
+            relatedData: {
+              orderNumber: order.orderNumber,
+              amount: buyerCashback,
+              companyProfit: totalMargin, 
+              companyShare: companyTake, 
+            }
+          });
         }
 
         // 2. Distribute MLM commissions
@@ -66,14 +84,35 @@ const CommissionService = {
 
             if (commissionAmount >= MIN_COMMISSION_PAYOUT) {
               await User.updateWalletBalance(uplineUserId, commissionAmount, session);
-              await WalletTransaction.create({
+              const commissionTransaction = {
                 userId: uplineUserId,
                 amount: commissionAmount,
                 type: 'mlm_commission',
                 description: `Level ${level} commission from order ${order.orderNumber}`,
+                status: 'completed',
                 relatedOrderId: order._id,
                 relatedUserId: buyer._id
-              }, session);
+              };
+              await db.collection('wallet_transactions').insertOne(commissionTransaction, { session });
+
+              // Create notification for commission
+              const uplineUser = await User.findById(uplineUserId);
+              if(uplineUser) {
+                await Notification.create({
+                  userId: uplineUser._id,
+                  userName: uplineUser.name,
+                  type: 'commission',
+                  message: `Lvl ${level} commission of ₹${commissionAmount.toFixed(2)} from ${buyer.name}`,
+                  relatedData: {
+                    orderNumber: order.orderNumber,
+                    commissionAmount: commissionAmount,
+                    fromUser: buyer.name,
+                    level: level,
+                    companyProfit: totalMargin,
+                    companyShare: companyTake
+                  }
+                });
+              }
             }
           }
         }

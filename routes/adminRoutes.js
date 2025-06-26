@@ -2,6 +2,8 @@ import express from 'express';
 import auth from '../middleware/auth.js';
 import User from '../models/User.js';
 import connectDB from '../db.js';
+import WalletTransaction from '../models/WalletTransaction.js';
+import Notification from '../models/Notification.js';
 
 const router = express.Router();
 
@@ -82,6 +84,84 @@ router.get('/referral-tree/:id', auth, adminAuth, async (req, res) => {
     res.json(referralTree);
   } catch (err) {
     console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route   GET api/admin/notifications
+// @desc    Get recent transactions for notification feed
+// @access  Private (Admin)
+router.get('/notifications', auth, adminAuth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const notifications = await db.collection('wallet_transactions').aggregate([
+      { $sort: { createdAt: -1 } },
+      { $limit: 15 },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'userDetails'
+        }
+      },
+      { 
+        $unwind: { 
+          path: '$userDetails',
+          preserveNullAndEmptyArrays: true
+        } 
+      },
+      {
+        $project: {
+          _id: '$_id',
+          type: '$type',
+          message: '$description',
+          userName: { $ifNull: [ '$userDetails.name', 'Unknown User' ] },
+          userId: '$userId',
+          amount: '$amount',
+          createdAt: '$createdAt',
+        }
+      }
+    ]).toArray();
+
+    res.json(notifications);
+  } catch (err) {
+    console.error('Error fetching admin notifications:', err);
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route   GET api/admin/stats/mlm-revenue
+// @desc    Get total company revenue from MLM commissions
+// @access  Private (Admin)
+router.get('/stats/mlm-revenue', auth, adminAuth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const result = await db.collection('notifications').aggregate([
+      {
+        $match: {
+          'relatedData.companyShare': { $exists: true, $gt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: '$relatedData.orderNumber',
+          companyShare: { $first: '$relatedData.companyShare' }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$companyShare' }
+        }
+      }
+    ]).toArray();
+
+    const totalRevenue = result.length > 0 ? result[0].totalRevenue : 0;
+    res.json({ totalRevenue });
+
+  } catch (err) {
+    console.error('Error fetching MLM revenue:', err);
     res.status(500).send('Server Error');
   }
 });
