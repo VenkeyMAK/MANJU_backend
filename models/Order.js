@@ -121,6 +121,28 @@ const Order = {
       { _id: new ObjectId(orderId) },
       { $set: { paymentStatus, updatedAt: new Date() } }
     );
+  },
+
+  async deleteOne(db, orderId) {
+    const collection = db.collection('orders');
+    return await collection.deleteOne({ _id: new ObjectId(orderId) });
+  },
+
+  async deleteAll(db) {
+    const collection = db.collection('orders');
+    return await collection.deleteMany({});
+  },
+
+  async deleteUserOrder(db, orderId, userId) {
+    const collection = db.collection('orders');
+    // Ensure the order belongs to the user before deleting
+    return await collection.deleteOne({ _id: new ObjectId(orderId), user: new ObjectId(userId) });
+  },
+
+  async deleteAllUserOrders(db, userId) {
+    const collection = db.collection('orders');
+    // Delete all orders for a specific user
+    return await collection.deleteMany({ user: new ObjectId(userId) });
   }
 };
 

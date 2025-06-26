@@ -59,42 +59,11 @@ router.post('/', auth, async (req, res) => {
             return res.status(400).json({ error: 'Order must contain at least one item.' });
         }
 
-        // Enrich items with category and costPrice from the database
-        const enrichedItems = await Promise.all(items.map(async (item) => {
-            const productCollections = [db.collection('Products'), db.collection('Accessories'), db.collection('groceries')];
-            let productDoc = null;
-
-            if (ObjectId.isValid(item.product)) {
-                const productId = new ObjectId(item.product);
-                for (const collection of productCollections) {
-                    productDoc = await collection.findOne({ _id: productId });
-                    if (productDoc) break;
-                }
-            }
-
-            // Use existing item data as a base, and enrich it if product is found
-            const baseItem = {
-                product: item.product,
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price,
-                image: item.image,
-                category: 'Uncategorized', // Default category
-                costPrice: item.price * 0.8 // Default cost price estimation
-            };
-
-            if (productDoc) {
-                baseItem.category = productDoc.category || 'Uncategorized';
-                // Use the actual cost price if available, otherwise estimate it
-                baseItem.costPrice = productDoc.costPrice || (productDoc.Price || productDoc.price) * 0.8;
-            }
-            
-            return baseItem;
-        }));
-
-        const orderData = {
+        // Items are now expected to be complete from the request, including category and costPrice.
+        // The backend will no longer enrich them from the database.
+        const newOrderData = {
             user: new ObjectId(req.user.id),
-            items: enrichedItems,
+            items,
             total,
             shippingInfo,
             email,
@@ -102,7 +71,7 @@ router.post('/', auth, async (req, res) => {
             paymentMethod,
         };
 
-        const newOrder = await Order.create(db, orderData);
+        const newOrder = await Order.create(db, newOrderData);
         
         res.status(201).json({ success: true, data: newOrder });
 
@@ -239,6 +208,68 @@ router.patch('/admin/orders/:id/payment-status', auth, isAdmin, async (req, res)
   } catch (err) {
     console.error('Error updating payment status:', err);
     res.status(500).json({ success: false, error: 'Failed to update payment status' });
+  }
+});
+
+// Delete all of a user's orders (user only)
+router.delete('/my-orders', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    await Order.deleteAllUserOrders(db, req.user.id);
+    res.json({ success: true, message: 'All your orders have been deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting all user orders:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete all your orders' });
+  }
+});
+
+// Delete a single order by ID (user must own the order)
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const result = await Order.deleteUserOrder(db, req.params.id, req.user.id);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Order not found or you do not have permission to delete it' });
+    }
+
+    res.json({ success: true, message: 'Order deleted successfully' });
+  } catch (err) {
+    // Avoid crashing on invalid ObjectId
+    if (err.name === 'BSONError') {
+      return res.status(400).json({ success: false, error: 'Invalid Order ID format' });
+    }
+    console.error('Error deleting order:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete order' });
+  }
+});
+
+// Delete a single order (admin only)
+router.delete('/admin/orders/:id', auth, isAdmin, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const result = await Order.deleteOne(db, req.params.id);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    res.json({ success: true, message: 'Order deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting order:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete order' });
+  }
+});
+
+// Delete all orders (admin only)
+router.delete('/admin/all-orders', auth, isAdmin, async (req, res) => {
+  try {
+    const db = await connectDB();
+    await Order.deleteAll(db);
+    res.json({ success: true, message: 'All orders deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting all orders:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete all orders' });
   }
 });
 
