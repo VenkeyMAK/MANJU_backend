@@ -40,6 +40,7 @@ import walletRoutes from './routes/walletRoutes.js';
 import authRoutes from './routes/auth.js';
  
 import erpRoutes from './routes/erp.js';
+import categoriesRoutes from './routes/categories.js';
  
 
 const __filename = fileURLToPath(import.meta.url);
@@ -93,6 +94,7 @@ app.use('/api/erp', erpRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/categories', categoriesRoutes);
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
