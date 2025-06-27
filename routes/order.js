@@ -47,54 +47,43 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   }
 };
 
-// GET /api/orders - Get all orders
-router.get('/', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const collection = db.collection('orders');
-        const orders = await collection.find({}).toArray();
-        res.json(orders);
-    } catch (err) {
-        console.error('Error fetching orders:', err);
-        res.status(500).json({ error: 'Failed to fetch orders', details: err.message });
-    }
-});
+
 
 // POST /api/orders - Create new order
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req, res) => {
     try {
         const db = await connectDB();
-        const collection = db.collection('orders');
-        const order = {
-            ...req.body,
-            createdAt: new Date(),
-            status: 'pending'
+        const { items, shippingInfo, email, mobile, paymentMethod, total } = req.body;
+
+        if (!items || items.length === 0) {
+            return res.status(400).json({ error: 'Order must contain at least one item.' });
+        }
+
+        // Items are now expected to be complete from the request, including category and costPrice.
+        // The backend will no longer enrich them from the database.
+        const newOrderData = {
+            user: new ObjectId(req.user.id),
+            items,
+            total,
+            shippingInfo,
+            email,
+            mobile,
+            paymentMethod,
         };
-        const result = await collection.insertOne(order);
-        res.status(201).json(result);
+
+        const newOrder = await Order.create(db, newOrderData);
+        
+        res.status(201).json({ success: true, data: newOrder });
+
     } catch (err) {
         console.error('Error creating order:', err);
         res.status(500).json({ error: 'Failed to create order', details: err.message });
     }
 });
 
-// GET /api/orders/:id - Get order by ID
-router.get('/:id', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const collection = db.collection('orders');
-        const order = await collection.findOne({ _id: new ObjectId(req.params.id) });
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
-        res.json(order);
-    } catch (err) {
-        console.error('Error fetching order:', err);
-        res.status(500).json({ error: 'Failed to fetch order', details: err.message });
-    }
-});
 
-router.get('/', auth, async (req, res) => {
+
+router.get('/my-orders', auth, async (req, res) => {
   try {
     const db = await connectDB();
     const orders = await Order.findByUserId(db, req.user.id);
@@ -219,6 +208,68 @@ router.patch('/admin/orders/:id/payment-status', auth, isAdmin, async (req, res)
   } catch (err) {
     console.error('Error updating payment status:', err);
     res.status(500).json({ success: false, error: 'Failed to update payment status' });
+  }
+});
+
+// Delete all of a user's orders (user only)
+router.delete('/my-orders', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    await Order.deleteAllUserOrders(db, req.user.id);
+    res.json({ success: true, message: 'All your orders have been deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting all user orders:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete all your orders' });
+  }
+});
+
+// Delete a single order by ID (user must own the order)
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const result = await Order.deleteUserOrder(db, req.params.id, req.user.id);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Order not found or you do not have permission to delete it' });
+    }
+
+    res.json({ success: true, message: 'Order deleted successfully' });
+  } catch (err) {
+    // Avoid crashing on invalid ObjectId
+    if (err.name === 'BSONError') {
+      return res.status(400).json({ success: false, error: 'Invalid Order ID format' });
+    }
+    console.error('Error deleting order:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete order' });
+  }
+});
+
+// Delete a single order (admin only)
+router.delete('/admin/orders/:id', auth, isAdmin, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const result = await Order.deleteOne(db, req.params.id);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    res.json({ success: true, message: 'Order deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting order:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete order' });
+  }
+});
+
+// Delete all orders (admin only)
+router.delete('/admin/all-orders', auth, isAdmin, async (req, res) => {
+  try {
+    const db = await connectDB();
+    await Order.deleteAll(db);
+    res.json({ success: true, message: 'All orders deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting all orders:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete all orders' });
   }
 });
 
