@@ -70,7 +70,7 @@ router.get('/all-products', async (req, res) => {
         const accessoriesPipeline = [
             {
                 $project: {
-                    _id: 1,
+                    _id: '$id',
                     name: '$name',
                     brand: '$brand',
                     price: '$price',
