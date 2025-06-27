@@ -40,8 +40,12 @@ import walletRoutes from './routes/walletRoutes.js';
 import authRoutes from './routes/auth.js';
  
 import erpRoutes from './routes/erp.js';
+
 import categoriesRoutes from './routes/categories.js';
  
+
+import adminDashboardRoutes from './routes/adminDashboard.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -87,9 +91,11 @@ app.use('/api/users', userRoutes);
 app.use('/api/groceries', groceryRoutes);
 
 // Add admin routes
-app.use('/api/admin', adminRoutes);
+
 app.use('/api/customers', customerRoutes);
 app.use('/api/erp', erpRoutes);
+app.use('/api/admin/dashboard', adminDashboardRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
