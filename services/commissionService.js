@@ -54,7 +54,7 @@ const CommissionService = {
             status: 'completed',
             relatedOrderId: order._id
           };
-          await db.collection('wallet_transactions').insertOne(cashbackTransaction, { session });
+          await WalletTransaction.create(db, cashbackTransaction, session);
 
           // Create notification for cashback
           await Notification.create({
@@ -93,7 +93,7 @@ const CommissionService = {
                 relatedOrderId: order._id,
                 relatedUserId: buyer._id
               };
-              await db.collection('wallet_transactions').insertOne(commissionTransaction, { session });
+              await WalletTransaction.create(db, commissionTransaction, session);
 
               // Create notification for commission
               const uplineUser = await User.findById(uplineUserId);

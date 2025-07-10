@@ -128,7 +128,7 @@ router.post('/purchase', auth, async (req, res) => {
                 createdAt: new Date()
             };
             const orderResult = await orderCollection.insertOne(newOrder, { session });
-            savedOrder = { ...newOrder, _id: orderResult.insertedId };
+            savedOrder = await orderCollection.findOne({ _id: orderResult.insertedId }, { session });
 
             const debitTransaction = {
                 userId: new ObjectId(req.user.id),

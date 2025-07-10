@@ -18,8 +18,7 @@ class WalletTransaction {
       .toArray();
   }
 
-  static async create(transactionData) {
-    const db = await connectDB();
+  static async create(db, transactionData, session) {
     const transaction = {
       userId: new ObjectId(transactionData.userId),
       amount: transactionData.amount,
@@ -35,7 +34,8 @@ class WalletTransaction {
       })
     };
 
-    const result = await db.collection('wallet_transactions').insertOne(transaction);
+    const options = session ? { session } : {};
+    const result = await db.collection('wallet_transactions').insertOne(transaction, options);
     return { ...transaction, _id: result.insertedId };
   }
 }

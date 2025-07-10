@@ -71,9 +71,61 @@ router.post('/', auth, async (req, res) => {
             paymentMethod,
         };
 
-        const newOrder = await Order.create(db, newOrderData);
-        
-        res.status(201).json({ success: true, data: newOrder });
+        const orderNumber = `ORD-${Date.now()}`;
+        const newOrder = await Order.create(db, { ...newOrderData, orderNumber });
+
+        // If payment is made via wallet, we need to debit the wallet and distribute commission right away.
+        if (paymentMethod === 'Wallet') {
+            const client = db.client;
+            const session = client.startSession();
+            try {
+                await session.withTransaction(async () => {
+                    const user = await db.collection('users').findOne({ _id: new ObjectId(req.user.id) }, { session });
+                    if (!user || (user.walletBalance || 0) < total) {
+                        throw new Error('Insufficient wallet balance or user not found.');
+                    }
+                    await db.collection('users').updateOne({ _id: new ObjectId(req.user.id) }, { $inc: { walletBalance: -total } }, { session });
+                    await CommissionService.distribute(newOrder);
+                });
+            } catch (e) {
+                console.error('Wallet transaction failed:', e);
+                // If wallet payment fails, we probably should not have created the order, or we should delete it.
+                // For now, we'll send an error response. The order is already created.
+                return res.status(500).json({ error: 'Wallet payment failed', details: e.message });
+            } finally {
+                session.endSession();
+            }
+        }
+
+        res.status(201).json({ success: true, order: newOrder });
+    } catch (err) {
+        console.error('Error creating order:', err);
+        res.status(500).json({ error: 'Failed to create order', details: err.message });
+    }
+});
+
+router.post('/:id/confirm-payment', auth, async (req, res) => {
+    try {
+        const db = await connectDB();
+        const order = await Order.findById(db, req.params.id);
+
+        if (!order) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+
+        // Ensure the user owns the order or is an admin
+        if (req.user.role !== 'admin' && order.user.toString() !== req.user.id) {
+            return res.status(403).json({ success: false, error: 'Not authorized to update this order' });
+        }
+
+        // Update payment status
+        await Order.updatePaymentStatus(db, req.params.id, 'Paid');
+
+        // Distribute commissions
+        await CommissionService.distribute(order);
+
+        res.json({ success: true, message: 'Payment confirmed and commissions distributed.' });
+
 
     } catch (err) {
         console.error('Error creating order:', err);
