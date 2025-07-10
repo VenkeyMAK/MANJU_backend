@@ -63,7 +63,7 @@ router.get('/all-products', validateQuery, async (req, res) => {
                   }
                 }
               },
-              else: "$Price" // Fallback to original Price if not a string
+              else: "$Price"
             }
           }
         }
@@ -226,20 +226,220 @@ router.get('/', async (req, res) => {
     const accessoriesCollection = db.collection('Accessories');
     const groceryCollection = db.collection('Grocery');
 
-    const [brands, rams, processors, accessoryTypes, groceryCategories] = await Promise.all([
-      productsCollection.distinct('Company Name', { 'Company Name': { $ne: null } }),
-      productsCollection.distinct('RAM', { RAM: { $ne: null } }),
-      productsCollection.distinct('Processor', { Processor: { $ne: null } }),
-      accessoriesCollection.distinct('category', { category: { $ne: null } }),
-      groceryCollection.distinct('category', { category: { $ne: null } })
-    ]);
 
-    const result = { brands, rams, processors, accessoryTypes, groceryCategories };
-    res.json(result);
-  } catch (err) {
-    console.error('Failed to fetch filter options:', err);
-    res.status(500).json({ error: 'Failed to fetch filter options', details: err.message });
-  }
+        const [mobileBrands, rams, processors, accessoryTypes, groceryCategories, accessoryBrands] = await Promise.all([
+            productsCollection.distinct('Company Name'),
+            productsCollection.distinct('RAM'),
+            productsCollection.distinct('Processor'),
+            accessoriesCollection.distinct('category'),
+            groceryCollection.distinct('category'),
+            accessoriesCollection.distinct('brand'),
+        ]);
+
+        res.json({ mobileBrands, accessoryBrands, rams, processors, accessoryTypes, groceryCategories });
+    } catch (err) {
+        console.error('Failed to fetch filter options:', err);
+        res.status(500).json({ error: 'Failed to fetch filter options', details: err.message });
+    }
+// =======
+//     const [brands, rams, processors, accessoryTypes, groceryCategories] = await Promise.all([
+//       productsCollection.distinct('Company Name', { 'Company Name': { $ne: null } }),
+//       productsCollection.distinct('RAM', { RAM: { $ne: null } }),
+//       productsCollection.distinct('Processor', { Processor: { $ne: null } }),
+//       accessoriesCollection.distinct('category', { category: { $ne: null } }),
+//       groceryCollection.distinct('category', { category: { $ne: null } })
+//     ]);
+
+//     const result = { brands, rams, processors, accessoryTypes, groceryCategories };
+//     res.json(result);
+//   } catch (err) {
+//     console.error('Failed to fetch filter options:', err);
+//     res.status(500).json({ error: 'Failed to fetch filter options', details: err.message });
+//   }
+// >>>>>>> 9f36afff6c297eca91d19bb583a371d8583e6766
+});
+
+// New endpoint for featured/limited products (20 per category)
+router.get('/featured-products', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const {
+            selectedCategory = 'all',
+            brand,
+            minPrice,
+            maxPrice,
+            ram,
+            processor,
+            accessoryType,
+            groceryCategory,
+            search,
+            sortBy = 'default'
+        } = req.query;
+
+        // Pipeline to standardize fields from the 'Products' (mobiles) collection
+        const productsPipeline = [
+            {
+                $addFields: {
+                    numericPrice: {
+                        $cond: {
+                            if: { $and: [{ $ne: ["$Price", null] }, { $ne: ["$Price", ""] }, { $eq: [{ $type: "$Price" }, "string"] }] },
+                            then: {
+                                $toInt: {
+                                    $trim: {
+                                        chars: " ",
+                                        input: {
+                                            $replaceAll: {
+                                                input: { $replaceAll: { input: "$Price", find: ",", replacement: "" } },
+                                                find: "₹",
+                                                replacement: ""
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            else: null
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: '$Model Name',
+                    brand: '$Company Name',
+                    price: '$numericPrice',
+                    type: 'mobile',
+                    category: 'mobiles',
+                    RAM: '$RAM',
+                    Processor: '$Processor',
+                    imageUrl: '$Image URL',
+                    description: '$Description'
+                }
+            }
+        ];
+
+        // Pipeline to standardize fields from the 'Accessories' collection
+        const accessoriesPipeline = [
+            {
+                $project: {
+                    _id: '$id',
+                    name: '$name',
+                    brand: '$brand',
+                    price: '$price',
+                    type: 'accessory',
+                    category: '$category',
+                    imageUrl: '$image_url',
+                    description: '$description'
+                }
+            }
+        ];
+
+        // Pipeline to standardize fields from the 'Grocery' collection
+        const groceryPipeline = [
+            {
+                $project: {
+                    _id: 1,
+                    name: '$name',
+                    brand: '$brand',
+                    price: '$price',
+                    type: 'grocery',
+                    category: '$category',
+                    imageUrl: '$image_url',
+                    description: '$description'
+                }
+            }
+        ];
+
+        let allProducts = [];
+
+        if (selectedCategory === 'all') {
+            // Get 20 products from each category
+            const [mobiles, accessories, groceries] = await Promise.all([
+                db.collection('Products').aggregate([...productsPipeline, { $limit: 20 }]).toArray(),
+                db.collection('Accessories').aggregate([...accessoriesPipeline, { $limit: 20 }]).toArray(),
+                db.collection('Grocery').aggregate([...groceryPipeline, { $limit: 20 }]).toArray()
+            ]);
+            allProducts = [...mobiles, ...accessories, ...groceries];
+        } else if (selectedCategory === 'mobiles') {
+            allProducts = await db.collection('Products').aggregate([...productsPipeline, { $limit: 20 }]).toArray();
+        } else if (selectedCategory === 'accessories') {
+            allProducts = await db.collection('Accessories').aggregate([...accessoriesPipeline, { $limit: 20 }]).toArray();
+        } else if (selectedCategory === 'groceries') {
+            allProducts = await db.collection('Grocery').aggregate([...groceryPipeline, { $limit: 20 }]).toArray();
+        }
+
+        // Apply filters if provided
+        if (search || brand || minPrice || maxPrice || ram || processor || accessoryType || groceryCategory) {
+            allProducts = allProducts.filter(product => {
+                // Search filter
+                if (search) {
+                    const searchRegex = new RegExp(search, 'i');
+                    const matchesSearch = searchRegex.test(product.name || '') || 
+                                        searchRegex.test(product.brand || '') || 
+                                        searchRegex.test(product.description || '');
+                    if (!matchesSearch) return false;
+                }
+
+                // Brand filter
+                if (brand) {
+                    const brandRegex = new RegExp(`^${brand}$`, 'i');
+                    if (!brandRegex.test(product.brand || '')) return false;
+                }
+
+                // Price filters
+                if (minPrice) {
+                    const minPriceNum = parseInt(minPrice, 10);
+                    if ((product.price || 0) < minPriceNum) return false;
+                }
+                if (maxPrice) {
+                    const maxPriceNum = parseInt(maxPrice, 10);
+                    if ((product.price || 0) > maxPriceNum) return false;
+                }
+
+                // Category-specific filters
+                if (selectedCategory === 'mobiles' || selectedCategory === 'all') {
+                    if (ram && product.RAM !== ram) return false;
+                    if (processor && product.Processor !== processor) return false;
+                } else if (selectedCategory === 'accessories' || selectedCategory === 'all') {
+                    if (accessoryType) {
+                        const typeRegex = new RegExp(`^${accessoryType}$`, 'i');
+                        if (!typeRegex.test(product.category || '')) return false;
+                    }
+                } else if (selectedCategory === 'groceries' || selectedCategory === 'all') {
+                    if (groceryCategory) {
+                        const categoryRegex = new RegExp(`^${groceryCategory}$`, 'i');
+                        if (!categoryRegex.test(product.category || '')) return false;
+                    }
+                }
+
+                return true;
+            });
+        }
+
+        // Apply sorting
+        if (sortBy && sortBy !== 'default') {
+            const sortMap = {
+                'price-asc': (a, b) => (a.price || 0) - (b.price || 0),
+                'price-desc': (a, b) => (b.price || 0) - (a.price || 0),
+                'name-asc': (a, b) => (a.name || '').localeCompare(b.name || ''),
+                'name-desc': (a, b) => (b.name || '').localeCompare(a.name || ''),
+            };
+            if (sortMap[sortBy]) {
+                allProducts.sort(sortMap[sortBy]);
+            }
+        }
+
+        res.json({
+            products: allProducts,
+            totalCount: allProducts.length,
+            currentPage: 1,
+            totalPages: 1
+        });
+
+    } catch (err) {
+        console.error('Error fetching featured products:', err);
+        res.status(500).json({ error: 'Failed to fetch featured products', details: err.message });
+    }
 });
 
 export default router;
