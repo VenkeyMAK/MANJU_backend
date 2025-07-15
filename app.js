@@ -54,7 +54,7 @@ const app = express();
 
 // Enable CORS for all routes with proper configuration
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://localhost:3000'],
+  origin: ['http://localhost:8080', 'http://localhost:3000','https://host.d2p0pqnnorxtd1.amplifyapp.com'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization','x-auth-token'],
   credentials: true
